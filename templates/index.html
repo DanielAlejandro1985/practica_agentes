@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Generador de Actas de Comité | Banco Pichincha</title>
+    <style>
+      :root {
+        --pichincha-blue: #0F265C;
+        --pichincha-blue-soft: #16367a;
+        --pichincha-yellow: #FFDD00;
+        --pichincha-charcoal: #2C2C30;
+        --pichincha-gray: #6E6E73;
+        --pichincha-ice: #f2f9f9;
+        --pichincha-ivory: #fff4e5;
+        --pichincha-white: #ffffff;
+        --border: #dfe8f4;
+        --muted: #5f6f87;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        padding: 24px;
+        font-family: Arial, Helvetica, sans-serif;
+        background: linear-gradient(180deg, #f5f8fb 0%, #edf4fb 100%);
+        color: var(--pichincha-blue);
+      }
+
+      .topbar {
+        max-width: 1200px;
+        margin: 0 auto 18px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 18px;
+        background: rgba(255,255,255,0.72);
+        border: 1px solid rgba(15,38,92,0.08);
+        border-radius: 18px;
+        backdrop-filter: blur(5px);
+      }
+
+      .brand {
+        font-weight: 700;
+        letter-spacing: 0.15em;
+        font-size: 15px;
+        text-transform: uppercase;
+      }
+
+      .brand-badge {
+        background: var(--pichincha-yellow);
+        color: var(--pichincha-blue);
+        border-radius: 999px;
+        padding: 10px 18px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        display: grid;
+        grid-template-columns: 1fr 1.25fr;
+        gap: 24px;
+      }
+
+      .panel {
+        background: #ffffff;
+        border-radius: 24px;
+        padding: 24px;
+        box-shadow: 0 18px 48px rgba(15,38,92,0.08);
+        border: 1px solid rgba(15,38,92,0.04);
+      }
+
+      .panel h1, .panel h2 {
+        margin: 0 0 18px;
+        color: var(--pichincha-blue);
+      }
+
+      .panel h1 {
+        font-size: clamp(1.8rem, 2vw, 2.4rem);
+        letter-spacing: -0.05em;
+      }
+
+      .hero-label {
+        display: inline-block;
+        background: var(--pichincha-blue);
+        color: white;
+        border-radius: 999px;
+        padding: 8px 12px;
+        font-size: 11px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        margin-bottom: 12px;
+      }
+
+      form {
+        display: grid;
+        gap: 14px;
+      }
+
+      label {
+        display: grid;
+        gap: 7px;
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--pichincha-blue);
+      }
+
+      input, select, textarea, button {
+        font: inherit;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        background: #fbfcff;
+        padding: 12px 14px;
+        color: var(--pichincha-charcoal);
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+      }
+
+      input:focus, select:focus, textarea:focus {
+        outline: none;
+        border-color: var(--pichincha-yellow);
+        box-shadow: 0 0 0 3px rgba(255, 221, 0, 0.25);
+      }
+
+      textarea {
+        min-height: 90px;
+        resize: vertical;
+      }
+
+      button {
+        background: var(--pichincha-yellow);
+        color: var(--pichincha-blue);
+        border: none;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        cursor: pointer;
+        padding: 14px 18px;
+        box-shadow: 0 8px 20px rgba(255, 221, 0, 0.28);
+      }
+
+      button:hover {
+        filter: brightness(0.98);
+      }
+
+      .preview-header {
+        background: var(--pichincha-blue);
+        color: white;
+        border-radius: 18px 18px 0 0;
+        padding: 18px 20px;
+        margin: -24px -24px 18px;
+      }
+
+      .preview-header strong {
+        font-size: 18px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .preview-header span {
+        display: block;
+        margin-top: 6px;
+        font-size: 12px;
+        opacity: 0.8;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .result {
+        white-space: pre-wrap;
+        line-height: 1.7;
+        font-size: 14px;
+        color: var(--pichincha-blue);
+        background: linear-gradient(180deg, #f9fbff 0%, #f6f9fd 100%);
+        border: 1px solid #e7edf7;
+        border-radius: 18px;
+        padding: 20px;
+        min-height: 260px;
+        font-family: "Segoe UI", Arial, sans-serif;
+      }
+
+      .result strong {
+        color: var(--pichincha-blue);
+      }
+
+      @media (max-width: 980px) {
+        .container {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">Banco Pichincha</div>
+      <div class="brand-badge">Acta de comité</div>
+    </header>
+
+    <div class="container">
+      <div class="panel">
+        <div class="hero-label">Generación</div>
+        <h1>Datos del caso</h1>
+        <form method="POST" enctype="multipart/form-data">
+          <label>
+            Nombre del cliente / negocio
+            <input name="client_name" value="{{ client_name }}" required>
+          </label>
+
+          <label>
+            Tipo de cliente
+            <select name="client_type">
+              <option value="persona natural" {% if client_type == 'persona natural' %}selected{% endif %}>Persona natural</option>
+              <option value="pyme" {% if client_type == 'pyme' %}selected{% endif %}>PYME</option>
+              <option value="corporativo" {% if client_type == 'corporativo' %}selected{% endif %}>Corporativo</option>
+            </select>
+          </label>
+
+          <label>
+            Tipo de análisis
+            <select name="analysis_type">
+              <option value="crédito ordinario" {% if analysis_type == 'crédito ordinario' %}selected{% endif %}>Crédito ordinario</option>
+              <option value="reestructuración" {% if analysis_type == 'reestructuración' %}selected{% endif %}>Reestructuración</option>
+              <option value="riesgo concentrado" {% if analysis_type == 'riesgo concentrado' %}selected{% endif %}>Riesgo concentrado</option>
+            </select>
+          </label>
+
+          <label>
+            Línea de crédito
+            <input name="linea_credito" value="{{ linea_credito }}">
+          </label>
+
+          <label>
+            Monto
+            <input type="number" name="amount" value="{{ amount }}" min="0" step="1000">
+          </label>
+
+          <label>
+            Proponente
+            <input name="proponente" value="{{ proponente }}">
+          </label>
+
+          <label>
+            Grupo económico
+            <input name="grupo_economico" value="{{ grupo_economico }}">
+          </label>
+
+          <label>
+            Nivel de riesgo
+            <select name="risk_level">
+              <option value="bajo" {% if risk_level == 'bajo' %}selected{% endif %}>Bajo</option>
+              <option value="medio" {% if risk_level == 'medio' %}selected{% endif %}>Medio</option>
+              <option value="alto" {% if risk_level == 'alto' %}selected{% endif %}>Alto</option>
+            </select>
+          </label>
+
+          <label>
+            Análisis financiero
+            <textarea name="analisis_financiero" placeholder="Escribe texto, pega un resumen o adjunta evidencia más adelante.">{{ analisis_financiero }}</textarea>
+            <input type="file" name="analisis_financiero_file" accept="image/*,.pdf,.doc,.docx">
+            {% if analisis_financiero_attachment %}
+              <small style="font-weight:500; color:var(--muted);">Archivo adjunto: <a href="/uploads/{{ analisis_financiero_attachment }}" target="_blank">{{ analisis_financiero_attachment }}</a></small>
+            {% endif %}
+          </label>
+
+          <label>
+            Garantías
+            <textarea name="garantias" placeholder="Escribe la descripción de garantías, activos o respaldos.">{{ garantias }}</textarea>
+            <input type="file" name="garantias_file" accept="image/*,.pdf,.doc,.docx">
+            {% if garantias_attachment %}
+              <small style="font-weight:500; color:var(--muted);">Archivo adjunto: <a href="/uploads/{{ garantias_attachment }}" target="_blank">{{ garantias_attachment }}</a></small>
+            {% endif %}
+          </label>
+
+          <label>
+            Condiciones
+            <textarea name="condiciones" placeholder="Escribe plazos, cuotas, condiciones y observaciones.">{{ condiciones }}</textarea>
+            <input type="file" name="condiciones_file" accept="image/*,.pdf,.doc,.docx">
+            {% if condiciones_attachment %}
+              <small style="font-weight:500; color:var(--muted);">Archivo adjunto: <a href="/uploads/{{ condiciones_attachment }}" target="_blank">{{ condiciones_attachment }}</a></small>
+            {% endif %}
+          </label>
+
+          <label>
+            Recomendación
+            <input name="recommendation" value="{{ recommendation }}">
+          </label>
+
+          <label>
+            Observaciones
+            <textarea name="observations">{{ observations }}</textarea>
+          </label>
+
+          <button type="submit">Generar acta</button>
+        </form>
+      </div>
+
+      <div class="panel">
+        <div class="preview-header">
+          <strong>Vista previa</strong>
+          <span>Documento para comité de crédito</span>
+        </div>
+        <div class="result">{{ generated_acta or 'Completa el formulario y genera una acta con la estructura institucional del comité.' }}</div>
+
+        {% if analisis_financiero_attachment or garantias_attachment or condiciones_attachment %}
+        <div class="attachment-panel" style="margin-top:18px; display:grid; gap:12px;">
+          {% if analisis_financiero_attachment %}
+            {% if analisis_financiero_attachment.lower().endswith(('.png','.jpg','.jpeg')) %}
+              <img src="/uploads/{{ analisis_financiero_attachment }}" alt="Adjunto análisis financiero" style="max-width:100%; border-radius:12px; border:1px solid #e1e8f5;" />
+            {% endif %}
+          {% endif %}
+          {% if garantias_attachment %}
+            {% if garantias_attachment.lower().endswith(('.png','.jpg','.jpeg')) %}
+              <img src="/uploads/{{ garantias_attachment }}" alt="Adjunto garantías" style="max-width:100%; border-radius:12px; border:1px solid #e1e8f5;" />
+            {% endif %}
+          {% endif %}
+          {% if condiciones_attachment %}
+            {% if condiciones_attachment.lower().endswith(('.png','.jpg','.jpeg')) %}
+              <img src="/uploads/{{ condiciones_attachment }}" alt="Adjunto condiciones" style="max-width:100%; border-radius:12px; border:1px solid #e1e8f5;" />
+            {% endif %}
+          {% endif %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,77 @@
+<svg width="1600" height="900" viewBox="0 0 1600 900" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgGrad" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#f7fafc"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1600" height="900" fill="url(#bgGrad)"/>
+
+  <text x="80" y="80" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="700" fill="#0F265C" letter-spacing="6">BANCO PICHINCHA</text>
+  <rect x="1320" y="52" width="180" height="42" rx="21" fill="#FFDD00"/>
+  <text x="1365" y="80" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="700" fill="#0F265C" letter-spacing="3">MOODBOARD</text>
+
+  <rect x="80" y="120" width="890" height="420" rx="30" fill="#0F265C"/>
+  <circle cx="1220" cy="440" r="180" fill="#FFDD00" opacity="0.15"/>
+
+  <text x="120" y="220" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" fill="#F2F9F9" letter-spacing="4">BANKING / TRUST / MOMENTUM</text>
+  <text x="120" y="300" font-family="Arial, Helvetica, sans-serif" font-size="78" font-weight="700" fill="#ffffff" letter-spacing="-3">Confianza</text>
+  <text x="120" y="380" font-family="Arial, Helvetica, sans-serif" font-size="78" font-weight="700" fill="#ffffff" letter-spacing="-3">digital con</text>
+  <text x="120" y="460" font-family="Arial, Helvetica, sans-serif" font-size="78" font-weight="700" fill="#ffffff" letter-spacing="-3">presencia</text>
+  <text x="120" y="540" font-family="Arial, Helvetica, sans-serif" font-size="78" font-weight="700" fill="#ffffff" letter-spacing="-3">institucional</text>
+
+  <rect x="120" y="570" width="170" height="46" rx="23" fill="#FFDD00"/>
+  <text x="158" y="600" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="700" fill="#0F265C" letter-spacing="3">BRAND SYSTEM</text>
+  <rect x="312" y="570" width="170" height="46" rx="23" fill="none" stroke="#ffffff" stroke-opacity="0.4"/>
+  <text x="350" y="600" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="700" fill="#ffffff" letter-spacing="3">DIGITAL FIRST</text>
+
+  <rect x="1005" y="120" width="500" height="200" rx="28" fill="#FFDD00"/>
+  <text x="1040" y="180" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="700" fill="#0F265C" letter-spacing="3">ATRIBUTO</text>
+  <text x="1040" y="245" font-family="Arial, Helvetica, sans-serif" font-size="58" font-weight="700" fill="#0F265C" letter-spacing="-2">Confianza</text>
+  <text x="1040" y="285" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="500" fill="#0F265C">Paleta sobria y estable para transmitir seguridad.</text>
+
+  <rect x="1005" y="350" width="500" height="190" rx="28" fill="#2C2C30"/>
+  <text x="1040" y="410" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="700" fill="#ffffff" letter-spacing="3">ATRIBUTO</text>
+  <text x="1040" y="475" font-family="Arial, Helvetica, sans-serif" font-size="58" font-weight="700" fill="#ffffff" letter-spacing="-2">Innovación</text>
+  <text x="1040" y="510" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="500" fill="#ffffff">Contrastes limpios para una identidad digital moderna.</text>
+
+  <rect x="80" y="620" width="700" height="220" rx="28" fill="#f9fafc" stroke="#dfe7f0"/>
+  <text x="120" y="675" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700" fill="#0F265C" letter-spacing="3">PALETA OFICIAL</text>
+
+  <rect x="120" y="705" width="150" height="90" rx="16" fill="#0F265C"/>
+  <text x="150" y="740" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="700" fill="#ffffff" letter-spacing="2">AZUL</text>
+  <text x="150" y="770" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" fill="#ffffff">#0F265C</text>
+
+  <rect x="290" y="705" width="150" height="90" rx="16" fill="#FFDD00"/>
+  <text x="322" y="740" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="700" fill="#0F265C" letter-spacing="2">AMARILLO</text>
+  <text x="322" y="770" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" fill="#0F265C">#FFDD00</text>
+
+  <rect x="460" y="705" width="150" height="90" rx="16" fill="#2C2C30"/>
+  <text x="492" y="740" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="700" fill="#ffffff" letter-spacing="2">GRIS</text>
+  <text x="492" y="770" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" fill="#ffffff">#2C2C30</text>
+
+  <rect x="630" y="705" width="120" height="90" rx="16" fill="#6E6E73"/>
+  <text x="653" y="740" font-family="Arial, Helvetica, sans-serif" font-size="11" font-weight="700" fill="#ffffff" letter-spacing="2">SECUNDARIO</text>
+  <text x="653" y="770" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700" fill="#ffffff">#6E6E73</text>
+
+  <rect x="820" y="620" width="685" height="220" rx="28" fill="#f2f9f9" stroke="#dfe7f0"/>
+  <text x="860" y="675" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700" fill="#0F265C" letter-spacing="3">REFERENCIAS VISUALES</text>
+
+  <rect x="860" y="705" width="140" height="90" rx="18" fill="#f2f9f9"/>
+  <rect x="1018" y="705" width="140" height="90" rx="18" fill="#fff4e5"/>
+  <rect x="1176" y="705" width="140" height="90" rx="18" fill="#6E6E73"/>
+  <rect x="1334" y="705" width="140" height="90" rx="18" fill="#0F265C"/>
+
+  <text x="925" y="740" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="700" fill="#0F265C" letter-spacing="2">ICE</text>
+  <text x="925" y="770" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="700" fill="#0F265C">#f2f9f9</text>
+
+  <text x="1080" y="740" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="700" fill="#0F265C" letter-spacing="2">WARM</text>
+  <text x="1080" y="770" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="700" fill="#0F265C">#fff4e5</text>
+
+  <text x="1213" y="740" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="700" fill="#ffffff" letter-spacing="2">GRAY</text>
+  <text x="1213" y="770" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="700" fill="#ffffff">#6E6E73</text>
+
+  <text x="1374" y="740" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="700" fill="#ffffff" letter-spacing="2">NAVY</text>
+  <text x="1374" y="770" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="700" fill="#ffffff">#0F265C</text>
+</svg>
