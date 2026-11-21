@@ -5,8 +5,14 @@ import {
   HeadingLevel,
   ImageRun,
   Packer,
+  PageBreak,
   Paragraph,
+  Table,
+  TableCell,
+  TableOfContents,
+  TableRow,
   TextRun,
+  WidthType,
 } from 'docx'
 import {
   deleteActa,
@@ -23,9 +29,11 @@ import { extractExcelChartData } from './excelData.js'
 import {
   SECTION_DEFINITIONS,
   buildCaseQuantitativeSummary,
+  buildConclusionStatement,
   buildNarrativeBlocks,
   chartToPng,
-  formatCurrency as formatCurrencyValue,
+  collectValidationIssues,
+  formatCurrency,
   normalizeText,
 } from './actaRichContent.js'
 import './App.css'
@@ -70,16 +78,6 @@ const formFieldLabels = {
   observations: 'Observaciones',
 }
 
-function formatCurrency(value) {
-  if (value === '' || value === null || value === undefined) return 'No especificado'
-  const amount = Number(value)
-  if (!Number.isFinite(amount)) return 'No especificado'
-  return new Intl.NumberFormat('es-EC', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 2,
-  }).format(amount)
-}
 
 function formatNarrativeValue(value, missingMessage) {
   const text = typeof value === 'string' ? value.trim() : String(value ?? '').trim()
@@ -105,17 +103,17 @@ async function loadLogoPng() {
   image.src = '/pichincha-logo.svg'
   await new Promise((resolve, reject) => {
     image.onload = resolve
-    image.onerror = reject
+    image.onerror = () => reject(new Error('No se pudo cargar el logo para generar el acta.'))
   })
 
   const canvas = document.createElement('canvas')
   canvas.width = image.naturalWidth
   canvas.height = image.naturalHeight
   const context = canvas.getContext('2d')
-  if (!context) throw new Error('No se pudo preparar el logo para Word.')
+  if (!context) throw new Error('No se pudo preparar el logo para el acta.')
   context.drawImage(image, 0, 0)
   const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'))
-  if (!blob) throw new Error('No se pudo preparar el logo para Word.')
+  if (!blob) throw new Error('No se pudo preparar el logo para el acta.')
   return new Uint8Array(await blob.arrayBuffer())
 }
 
@@ -381,22 +379,36 @@ function App() {
 
   const buildWord = async (data = form) => {
     const logoPng = await loadLogoPng()
-    const clientName = formatNarrativeValue(data.clientName, 'Nombre del cliente no informado')
-    const context = { clientName, amount: data.amount }
+    const clientName = formatNarrativeValue(data.clientName, 'Cliente no informado')
+    const context = { clientName, amount: data.amount, data }
 
-    const blocksToParagraphs = (blocks) => blocks.flatMap((block) => {
+    const blocksToParagraphs = (blocks, { justify = true, spacingAfter = 160 } = {}) => blocks.flatMap((block) => {
       if (block.type === 'bullet') {
         return [new Paragraph({
           text: block.text,
           bullet: { level: 0 },
-          spacing: { after: 80 },
+          alignment: justify ? AlignmentType.JUSTIFIED : undefined,
+          spacing: { after: 60 },
         })]
       }
       return [new Paragraph({
         children: [new TextRun({ text: block.text })],
-        spacing: { after: 180 },
+        alignment: justify ? AlignmentType.JUSTIFIED : undefined,
+        spacing: { after: spacingAfter },
       })]
     })
+
+    const justifiedParagraph = (text, { spacing = { after: 160 }, bold = false } = {}) => new Paragraph({
+      children: [new TextRun({ text, bold })],
+      alignment: AlignmentType.JUSTIFIED,
+      spacing,
+    })
+
+    const metricLabel = (value) => {
+      const text = normalizeText(value)
+      if (!text) return 'No informado'
+      return text
+    }
 
     const attachmentEntries = await Promise.all(attachmentSections.map(async ({ key, label }) => {
       const newFile = attachedFiles[key]?.file || null
@@ -421,24 +433,35 @@ function App() {
       return { key, label, name, blob: Boolean(blob), chartData }
     }))
 
-    const allChartDatasets = attachmentEntries.flatMap((entry) => entry.chartData.datasets.map((dataset) => ({ ...dataset, source: entry.label })))
-    const caseSummary = buildCaseQuantitativeSummary(data, attachmentEntries.map((entry) => ({ label: entry.label, summary: entry.chartData.summary })))
+    const validationIssues = collectValidationIssues(data, attachmentEntries)
+    const caseSummary = buildCaseQuantitativeSummary(data, attachmentEntries)
+    const allChartDatasets = attachmentEntries.flatMap((entry) => (entry.chartData.datasets || []).map((dataset) => ({ ...dataset, source: entry.label })))
 
-    const identificationBullets = [
-      `Cliente: ${clientName}`,
-      `Tipo de cliente: ${formatNarrativeValue(data.clientType, 'No informado')}`,
-      `Tipo de análisis: ${formatNarrativeValue(data.analysisType, 'No informado')}`,
-      `Línea de crédito: ${formatNarrativeValue(data.line, 'No informada')}`,
-      `Monto solicitado: ${formatCurrency(data.amount)}`,
-      `Proponente: ${formatNarrativeValue(data.proposal, 'No informado')}`,
-      `Grupo económico: ${formatNarrativeValue(data.group, 'No informado')}`,
-      `Nivel de riesgo: ${formatNarrativeValue(data.risk, 'No informado')}`,
-    ].map((text) => ({ type: 'bullet', text }))
-    const identificationNarrative = [
-      { type: 'paragraph', text: `El presente acta documenta de manera detallada y exhaustiva la información disponible sobre ${clientName} y la operación sometida a consideración del comité. La exposición se estructura para facilitar la revisión de auditoría, presentando el contexto, el análisis, las implicaciones y las conclusiones de cada sección con base en la evidencia registrada.` },
-      ...identificationBullets,
-      { type: 'paragraph', text: 'Cada dato de identificación debe interpretarse de manera conjunta con el perfil, el análisis financiero, las garantías, las condiciones y la recomendación. No se deben extraer conclusiones aisladas ni asumir información no acreditada; cualquier vacío o inconsistencia constituye una limitación que debe resolverse y documentarse antes de la decisión definitiva o del desembolso.' },
+    const identificationRows = [
+      ['Cliente', clientName],
+      ['Tipo de cliente', metricLabel(data.clientType)],
+      ['Tipo de análisis', metricLabel(data.analysisType)],
+      ['Línea / producto', metricLabel(data.line)],
+      ['Monto solicitado', formatCurrency(data.amount) || 'No informado'],
+      ['Proponente', metricLabel(data.proposal)],
+      ['Grupo económico', metricLabel(data.group)],
+      ['Nivel de riesgo', metricLabel(data.risk)],
     ]
+    const identificationTable = new Table({
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      rows: identificationRows.map(([label, value]) => new TableRow({
+        children: [
+          new TableCell({
+            width: { size: 35, type: WidthType.PERCENTAGE },
+            children: [new Paragraph({ children: [new TextRun({ text: label, bold: true })], spacing: { after: 40 } })],
+          }),
+          new TableCell({
+            width: { size: 65, type: WidthType.PERCENTAGE },
+            children: [new Paragraph({ children: [new TextRun({ text: String(value || 'No informado') })], spacing: { after: 40 } })],
+          }),
+        ],
+      })),
+    })
 
     const children = [
       new Paragraph({
@@ -448,16 +471,27 @@ function App() {
       new Paragraph({
         alignment: AlignmentType.CENTER,
         spacing: { before: 240, after: 80 },
-        children: [new TextRun({ text: 'ACTA DE REUNIÓN', bold: true, size: 32, color: '0F265C' })],
+        children: [new TextRun({ text: 'ACTA DE ANÁLISIS CREDITICIO', bold: true, size: 32, color: '0F265C' })],
       }),
       new Paragraph({
         alignment: AlignmentType.CENTER,
-        spacing: { after: 240 },
+        spacing: { after: 120 },
         children: [new TextRun({ text: summary.title, color: '6E6E73', size: 22 })],
       }),
-      new Paragraph({ children: [new TextRun({ text: `Fecha de generación: ${new Date().toLocaleDateString('es-EC')}` })] }),
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { after: 320 },
+        children: [new TextRun({ text: `Cliente: ${clientName}`, size: 24, bold: true })],
+      }),
+      new Paragraph({ children: [new TextRun({ text: `Fecha de emisión: ${new Date().toLocaleDateString('es-EC')}`, bold: true })], spacing: { after: 240 } }),
+      new Paragraph({ text: 'Tabla de contenido', heading: HeadingLevel.HEADING_1 }),
+      new TableOfContents('Tabla de contenido', { hyperlink: true, headingStyleRange: '1-3' }),
+      new Paragraph({ children: [new PageBreak()] }),
       new Paragraph({ text: 'Identificación del cliente y alcance del análisis', heading: HeadingLevel.HEADING_1 }),
-      ...blocksToParagraphs(identificationNarrative),
+      justifiedParagraph('El presente acta consolida la información registrada para el caso y los soportes incorporados al expediente, con el fin de sustentar la deliberación y dejar trazabilidad de los elementos considerados en el análisis crediticio.'),
+      identificationTable,
+      new Paragraph({ text: '', spacing: { after: 120 } }),
+      justifiedParagraph('El alcance del análisis se circunscribe a los datos y documentos disponibles al momento de la emisión. Los aspectos no informados o pendientes se señalan explícitamente en las secciones correspondientes y, cuando aplica, en la validación de consistencia.'),
     ]
 
     for (const section of SECTION_DEFINITIONS) {
@@ -466,87 +500,92 @@ function App() {
       children.push(...blocksToParagraphs(blocks))
     }
 
-    for (const entry of attachmentEntries) {
-      if (!entry.name) continue
-      children.push(new Paragraph({ text: `Soporte adjunto – ${entry.label}`, heading: HeadingLevel.HEADING_1 }))
-      children.push(new Paragraph({
-        children: [new TextRun({ text: `El expediente incluye el anexo Excel «${entry.name}» como soporte de ${entry.label.toLocaleLowerCase('es')}. Este documento forma parte de la evidencia del caso y sus cifras, detalles y conclusiones deben conciliarse con el análisis narrativo, sin omitir información relevante para auditoría.` })],
-        spacing: { after: 120 },
-      }))
-      if (entry.chartData.summary.length) {
-        children.push(...entry.chartData.summary.map((item) => new Paragraph({
-          text: `• Hoja ${item.sheetName}: ${item.count} valores numéricos identificados (suma total de valores detectados: ${item.total.toLocaleString('es-EC')}).`,
-          bullet: { level: 0 },
-          spacing: { after: 60 },
-        })))
-      } else {
-        children.push(new Paragraph({
-          children: [new TextRun({ text: 'No se detectaron series o valores numéricos estructurados automáticamente en este anexo; aun así, el archivo debe revisarse íntegramente como soporte documental del análisis.' })],
-          spacing: { after: 120 },
-        }))
+    const availableAttachments = attachmentEntries.filter((entry) => entry.name)
+    if (availableAttachments.length) {
+      children.push(new Paragraph({ text: 'Soportes del expediente', heading: HeadingLevel.HEADING_1 }))
+      for (const entry of availableAttachments) {
+        children.push(new Paragraph({ text: `${entry.label}: ${entry.name}`, heading: HeadingLevel.HEADING_2 }))
+        children.push(justifiedParagraph(`Archivo incorporado como soporte de ${entry.label.toLocaleLowerCase('es')}. Su contenido debe considerarse en conjunto con la información consignada en el acta.`))
+        if ((entry.chartData.summary || []).length) {
+          const sheetBullets = entry.chartData.summary.slice(0, 12).map((item) => ({
+            type: 'bullet',
+            text: `Hoja ${item.sheetName}: ${item.count} valores numéricos identificados${Number.isFinite(item.total) ? ` (suma referencial: ${item.total.toLocaleString('es-EC')})` : ''}.`,
+          }))
+          children.push(...blocksToParagraphs(sheetBullets, { spacingAfter: 120 }))
+        } else {
+          children.push(justifiedParagraph('No se identificaron tablas o series numéricas estructuradas para extracción automática en este anexo; corresponde su revisión directa como parte del expediente.'))
+        }
       }
     }
 
-    children.push(new Paragraph({ text: 'Análisis gráfico e histórico', heading: HeadingLevel.HEADING_1 }))
-    children.push(new Paragraph({
-      children: [new TextRun({ text: 'Esta sección presenta los gráficos y resúmenes cuantitativos elaborados con todos los datos numéricos disponibles en el acta y en los anexos analizados. Cada gráfico se acompaña de una interpretación narrativa para facilitar la comprensión del comportamiento, la tendencia o la composición de la información, sin omitir datos cuantitativos identificados.' })],
-      spacing: { after: 180 },
-    }))
-    children.push(...caseSummary.map((item) => new Paragraph({
-      text: `${item.label}: ${item.value}.`,
-      bullet: { level: 0 },
-      spacing: { after: 60 },
-    })))
+    if (caseSummary.length || allChartDatasets.length) {
+      children.push(new Paragraph({ text: 'Información cuantitativa y evidencia gráfica', heading: HeadingLevel.HEADING_1 }))
+      if (caseSummary.length) {
+        children.push(justifiedParagraph('Indicadores y datos cuantitativos disponibles del caso:'))
+        const summaryRows = [
+          new TableRow({
+            children: [
+              new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: 'Indicador / dato', bold: true })] })] }),
+              new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: 'Valor', bold: true })] })] }),
+            ],
+          }),
+          ...caseSummary.map((item) => new TableRow({
+            children: [
+              new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: String(item.label || '') })], spacing: { after: 40 } })] }),
+              new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: String(item.value || 'No informado') })], spacing: { after: 40 } })] }),
+            ],
+          })),
+        ]
+        children.push(new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: summaryRows }))
+        children.push(new Paragraph({ text: '', spacing: { after: 120 } }))
+      }
 
-    const summaryChart = await chartToPng({
-      title: 'Resumen cuantitativo del caso',
-      labels: caseSummary.map((item) => item.label.slice(0, 18)),
-      series: [{ name: 'Valor', values: caseSummary.map((item) => Number.isFinite(item.numeric) ? item.numeric : 0) }],
-      kind: 'bar',
-    })
-    if (summaryChart) {
-      children.push(new Paragraph({
-        children: [new ImageRun({ data: summaryChart, transformation: { width: 600, height: 280 }, type: 'png' })],
-        spacing: { before: 120, after: 120 },
-      }))
-      children.push(new Paragraph({
-        children: [new TextRun({ text: 'Interpretación: el gráfico resume los indicadores cuantitativos disponibles del caso (incluyendo monto y datos numéricos identificados). Su lectura debe complementarse con el análisis narrativo y con la conciliación de los soportes, considerando que los valores representan la información registrada y detectada al momento de generar el acta.' })],
-        spacing: { after: 180 },
-      }))
-    }
-
-    if (allChartDatasets.length === 0) {
-      children.push(new Paragraph({
-        children: [new TextRun({ text: 'No se identificaron series históricas o tablas numéricas adicionales en los anexos disponibles para generar gráficos de tendencia específicos. Se incluyen, sin omisión, los datos cuantitativos del caso y los conteos de valores numéricos detectados en los soportes analizados; cualquier dato histórico no estructurado deberá revisarse directamente en los anexos.' })],
-        spacing: { after: 180 },
-      }))
-    } else {
       for (const dataset of allChartDatasets) {
+        if (!dataset || !(dataset.series || []).length || !(dataset.labels || []).length) continue
         const image = await chartToPng({
-          title: dataset.title,
+          title: dataset.title || `${dataset.source || 'Anexo'}: datos cuantitativos`,
           labels: dataset.labels,
           series: dataset.series,
-          kind: dataset.kind,
+          kind: dataset.kind || 'bar',
+          unit: dataset.unit || '',
         })
         if (!image) continue
-        children.push(new Paragraph({ text: dataset.title, heading: HeadingLevel.HEADING_2 }))
+        children.push(new Paragraph({ text: dataset.title || 'Gráfico de soporte', heading: HeadingLevel.HEADING_2 }))
         children.push(new Paragraph({
-          children: [new ImageRun({ data: image, transformation: { width: 600, height: 280 }, type: 'png' })],
-          spacing: { before: 80, after: 120 },
+          children: [new ImageRun({ data: image, transformation: { width: 620, height: 290 }, type: 'png' })],
+          spacing: { before: 60, after: 100 },
         }))
-        const seriesDetail = dataset.series.map((series) => `${series.name}: ${series.values.filter((value) => value !== null).map((value) => value.toLocaleString('es-EC')).join(', ') || 'sin valores numéricos detectados'}`).join(' | ')
-        children.push(new Paragraph({
-          children: [new TextRun({ text: `Interpretación del gráfico: se presenta la información cuantitativa disponible para ${dataset.source.toLowerCase()}${dataset.kind === 'line' ? ' como tendencia/histórico' : ' como comparativo de valores'}. Series y valores representados: ${seriesDetail}. Esta visualización no omite los valores numéricos detectados y debe analizarse junto con el detalle del anexo y el contexto narrativo de la sección correspondiente.` })],
-          spacing: { after: 180 },
-        }))
+        const seriesDetail = (dataset.series || []).map((series) => {
+          const values = (series.values || []).filter((value) => value !== null && value !== undefined && Number.isFinite(Number(value))).map((value) => Number(value).toLocaleString('es-EC'))
+          return `${series.name || 'Serie'}: ${values.length ? values.join(', ') : 'sin valores numéricos representados'}`
+        }).join(' | ')
+        const unitNote = dataset.unit ? ` Unidad/referencia: ${dataset.unit}.` : ''
+        const periodNote = dataset.labels?.length ? ` Periodos/categorías: ${dataset.labels.join(', ')}.` : ''
+        children.push(justifiedParagraph(`Fuente: ${dataset.source || 'anexo'}.${unitNote}${periodNote} Series: ${seriesDetail}. La interpretación debe realizarse en función de la tendencia/composición observada y su relación con la capacidad de pago, la exposición y los mitigantes del caso.`))
       }
     }
 
-    children.push(new Paragraph({ text: 'Conclusión integral del análisis', heading: HeadingLevel.HEADING_1 }))
-    children.push(new Paragraph({
-      children: [new TextRun({ text: `La decisión sobre la operación de ${clientName} debe fundamentarse en la evaluación conjunta de la identificación del cliente, el perfil, el análisis financiero y la capacidad de pago, las garantías, las condiciones, la recomendación, las observaciones y los gráficos e históricos presentados. Todos los datos cuantitativos disponibles han sido considerados en el análisis; cualquier dato pendiente, inconsistencia o limitación de la información debe resolverse y documentarse antes del desembolso.` })],
-      spacing: { after: 180 },
-    }))
+    if (validationIssues.length) {
+      children.push(new Paragraph({ text: 'Validación y consistencia del expediente', heading: HeadingLevel.HEADING_1 }))
+      children.push(justifiedParagraph('Se identificaron observaciones de validación que deben considerarse para la deliberación y la trazabilidad del caso:'))
+      const issueRows = [
+        new TableRow({
+          children: ['Dato/área afectada', 'Fuente', 'Observación', 'Acción de validación requerida'].map((heading) => new TableCell({
+            children: [new Paragraph({ children: [new TextRun({ text: heading, bold: true })], spacing: { after: 40 } })],
+          })),
+        }),
+        ...validationIssues.map((issue) => new TableRow({
+          children: [issue.field, issue.source, issue.detail, issue.action].map((value) => new TableCell({
+            children: [new Paragraph({ children: [new TextRun({ text: String(value || '') })], spacing: { after: 40 }, alignment: AlignmentType.JUSTIFIED })],
+          })),
+        })),
+      ]
+      children.push(new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: issueRows }))
+      children.push(new Paragraph({ text: '', spacing: { after: 120 } }))
+    }
+
+    children.push(new Paragraph({ text: 'Conclusión y recomendación crediticia', heading: HeadingLevel.HEADING_1 }))
+    children.push(justifiedParagraph(buildConclusionStatement(data.recommendation, data.conditions, clientName)))
 
     const documentFile = new Document({
       styles: {
@@ -557,14 +596,20 @@ function App() {
           },
         },
       },
-      sections: [{ children }],
+      sections: [{
+        properties: {
+          page: {
+            margin: { top: 720, right: 720, bottom: 720, left: 720 },
+          },
+        },
+        children,
+      }],
     })
     return {
       blob: await Packer.toBlob(documentFile),
       filename: getWordFilename(data.clientName),
     }
   }
-
   const exportActa = async () => {
     if (!form.clientName.trim()) {
       setExportError('Ingresa el nombre del cliente para generar el Word.')
@@ -597,17 +642,27 @@ function App() {
       const normalizedForm = Object.fromEntries(
         Object.entries(form).map(([field, value]) => [field, typeof value === 'string' ? value.trim() : value]),
       )
-      const { blob, filename } = await buildWord(normalizedForm)
-      const word = new File([blob], filename, {
-        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      })
+
+      let blob
+      let filename
+      try {
+        ;({ blob, filename } = await buildWord(normalizedForm))
+      } catch (error) {
+        throw new Error(error instanceof Error ? `No se pudo generar el documento Word: ${error.message}` : 'No se pudo generar el documento Word para guardar el acta.')
+      }
+
+      const wordFile = typeof File === 'function'
+        ? new File([blob], filename, { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' })
+        : Object.assign(blob, { name: filename })
       const uploads = Object.fromEntries(
-        Object.entries(attachedFiles).map(([section, attachment]) => [section, attachment.file]),
+        Object.entries(attachedFiles)
+          .map(([section, attachment]) => [section, attachment?.file])
+          .filter(([, file]) => file),
       )
       const result = await saveActa({
         id: selectedActaId,
         data: normalizedForm,
-        word,
+        word: wordFile,
         attachments: uploads,
         removedAttachments,
       })
@@ -626,6 +681,7 @@ function App() {
       setSuccessMessage('Acta guardada en la base local.')
     } catch (error) {
       setApiError(error instanceof Error ? error.message : 'No se pudo guardar el acta.')
+      console.error('Error al guardar acta:', error)
     } finally {
       setSaving(false)
     }
@@ -710,7 +766,7 @@ function App() {
     return elements
   }
 
-  const previewContext = { clientName: form.clientName || 'Cliente', amount: form.amount }
+  const previewContext = { clientName: form.clientName || 'Cliente', amount: form.amount, data: form }
   const quantitativePreview = buildCaseQuantitativeSummary(form, attachmentSections.map(({ key, label }) => {
     const file = attachedFiles[key]?.file
     return { label, summary: file ? [{ sheetName: 'Anexo cargado', count: 0, total: 0 }] : [] }
@@ -1068,7 +1124,7 @@ function App() {
               </div>
               <div>
                 <span>Monto</span>
-                <strong>{summary.amount}</strong>
+                <strong>{formatCurrency(form.amount) || 'No informado'}</strong>
               </div>
               <div>
                 <span>Riesgo</span>
@@ -1085,7 +1141,7 @@ function App() {
                 <li>Proponente: {formatNarrativeValue(form.proposal, 'No informado')}</li>
                 <li>Grupo económico: {formatNarrativeValue(form.group, 'No informado')}</li>
               </ul>
-              <p>La información anterior se integra con el análisis narrativo y los soportes para sustentar la revisión de auditoría, sin omitir datos registrados.</p>
+              <p>El alcance se limita a la información y soportes disponibles al momento de la emisión; los datos no informados o pendientes se señalan explícitamente.</p>
             </section>
 
             {SECTION_DEFINITIONS.map((section) => (
@@ -1095,17 +1151,47 @@ function App() {
               </section>
             ))}
 
+            {(() => {
+              const previewAttachments = attachmentSections.map(({ key, label }) => {
+                const name = attachedFiles[key]?.name || (!removedAttachments.includes(key) && savedAttachments[key]?.filename) || ''
+                return { key, label, name, blob: Boolean(attachedFiles[key]?.file || (!removedAttachments.includes(key) && savedAttachments[key])) }
+              })
+              const metrics = buildCaseQuantitativeSummary(form, previewAttachments)
+              return metrics.length ? (
+                <section className="summary-block">
+                  <h3>Información cuantitativa disponible</h3>
+                  <ul>
+                    {metrics.map((item, index) => (
+                      <li key={`q-${index}`}>{item.label}: {item.value}</li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null
+            })()}
+
+            {(() => {
+              const previewAttachmentEntries = attachmentSections.map(({ key, label }) => ({
+                key,
+                label,
+                name: attachedFiles[key]?.name || (!removedAttachments.includes(key) && savedAttachments[key]?.filename) || '',
+                chartData: { datasets: [], summary: [] },
+              }))
+              const issues = collectValidationIssues(form, previewAttachmentEntries)
+              return issues.length ? (
+                <section className="summary-block">
+                  <h3>Validación y consistencia</h3>
+                  <ul>
+                    {issues.map((issue, index) => (
+                      <li key={`v-${index}`}><strong>{issue.field}</strong> ({issue.source}): {issue.detail} Acción: {issue.action}</li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null
+            })()}
+
             <section className="summary-block">
-              <h3>Análisis gráfico e histórico</h3>
-              <p>El documento Word incluirá gráficos y resúmenes con todos los datos cuantitativos disponibles del caso y de los anexos Excel analizados (tendencias/históricos cuando existan series, y comparativos/resúmenes para los demás valores numéricos detectados), junto con su interpretación narrativa.</p>
-              <ul>
-                {buildCaseQuantitativeSummary(form, attachmentSections.map(({ key, label }) => ({
-                  label,
-                  summary: (attachedFiles[key]?.file || (savedAttachments[key] && !removedAttachments.includes(key))) ? [{ sheetName: 'Anexo disponible', count: 1, total: 0 }] : [],
-                }))).map((item, index) => (
-                  <li key={`q-${index}`}>{item.label}: {item.value}</li>
-                ))}
-              </ul>
+              <h3>Conclusión y recomendación crediticia</h3>
+              <p>{buildConclusionStatement(form.recommendation, form.conditions, form.clientName || 'el cliente evaluado')}</p>
             </section>
           </div>
         </aside>

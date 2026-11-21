@@ -561,6 +561,46 @@ ANALYSIS_TEMPLATES: Dict[str, Dict[str, str]] = {
 }
 
 
+def build_conclusion_statement(recommendation: str, conditions: str = "", client_name: str = "el cliente evaluado") -> str:
+    import re
+
+    recommendation_text = (recommendation or "").strip()
+    conditions_text = (conditions or "").strip()
+    combined = f"{recommendation_text}\n{conditions_text}".casefold()
+    decision = "indeterminada"
+    if combined.strip():
+        def has(pattern: str) -> bool:
+            return re.search(pattern, combined) is not None
+
+        negative = has(r"\bno\s+(se\s+)?recomiend|\bno\s+(es\s+)?(procedente|recomendable|aconsejable|viable)|\brechaz|\bdesfavor|\bno\s+aprobar|\bno\s+proced|\bnegar|\bimproceden|\bdenegar")
+        positive = has(r"\bse\s+recomiend|\brecomiend\w*\s+(aprobar|continuar|otorg|conced|mantener|proceder|autorizar)|\baprobar\b|\bfavorable\b|\bprocedente\b|\botorgar\b|\bconceder\b|\bautorizar\b")
+        conditional = has(r"\bcondici|\bsujet[oa]\s+a|\bsupedit|\bsiempre\s+que|\bprevio\s+a|\bantes\s+de(l)?\b|\buna\s+vez\b|\bmitig|\bcovenant\b|\breestructur|\bajust|\bl[ií]mit|\bseguimiento|\bgarant|\bcautelar|\brestric|\breserva")
+        if negative and not positive:
+            decision = "no_aprobar"
+        elif negative and positive:
+            decision = "aprobar_con_condiciones"
+        elif positive and conditional:
+            decision = "aprobar_con_condiciones"
+        elif conditional and not negative:
+            decision = "aprobar_con_condiciones"
+        elif positive:
+            decision = "aprobar"
+        elif negative:
+            decision = "no_aprobar"
+
+    basis = "con base en la información y los fundamentos documentados en el perfil, el análisis financiero y capacidad de pago, las garantías, las condiciones y las observaciones"
+    client = (client_name or "el cliente evaluado").strip() or "el cliente evaluado"
+    if decision == "aprobar":
+        return f"Se recomienda aprobar el crédito para {client}, {basis}."
+    if decision == "aprobar_con_condiciones":
+        return f"Se recomienda aprobar el crédito para {client} con condiciones, supeditado al cumplimiento previo y/o permanente de las condiciones, mitigantes y controles documentados, {basis}."
+    if decision == "no_aprobar":
+        return f"No se recomienda aprobar el crédito para {client}, {basis}."
+    if recommendation_text:
+        return f"La postura crediticia para {client} debe interpretarse conforme a la recomendación documentada, sin asumir una aprobación definitiva no expresada; {basis}."
+    return f"No es posible emitir una conclusión crediticia definitiva para {client} sin una recomendación expresa documentada; la decisión debe adoptarse una vez sustentados y validados los elementos críticos del caso."
+
+
 def generate_acta(
     client_name: str,
     client_type: str,
@@ -583,61 +623,21 @@ def generate_acta(
     def normalize_key(value: str) -> str:
         return (value or "").strip().casefold()
 
-    client_template = CLIENT_TEMPLATES.get(
-        normalize_key(client_type),
-        {
-            "perfil": "Cliente cuya información disponible debe evaluarse de forma integral considerando sus ingresos, obligaciones, patrimonio y comportamiento financiero.",
-            "riesgo": "Se revisa la consistencia de la información, la estabilidad de los ingresos, las obligaciones vigentes y los factores que puedan afectar el cumplimiento.",
-        },
-    )
-    analysis_template = ANALYSIS_TEMPLATES.get(
-        normalize_key(analysis_type),
-        {
-            "resumen": "El caso se analiza con base en la información disponible, verificando la coherencia entre monto, capacidad de pago, garantías y condiciones.",
-            "recomendacion": "Se recomienda resolver conforme a la evidencia disponible, dejando constancia de pendientes, mitigantes y condiciones de seguimiento.",
-        },
-    )
-
-    def section_content(value: str, missing: str, attachment_name: str = "") -> str:
+    def section_content(value: str, missing: str, attachment_name: str = "", focus: str = "") -> str:
         text = (value or "").strip()
         if text:
-            lines = [line.rstrip() for line in text.splitlines()]
-            preserved = "\n".join(lines).strip()
-            intro = (
-                "A continuación se presenta la información disponible para esta sección, "
-                "conservando los puntos o viñetas registrados y complementándolos con un "
-                "análisis narrativo detallado para facilitar la revisión de auditoría."
-            )
-            detail = (
-                f"Detalle de la información proporcionada:\n{preserved}\n\n"
-                "Análisis y contexto: la información anterior debe interpretarse de manera integral, "
-                "considerando su alcance, consistencia, implicaciones sobre la capacidad de pago y el riesgo, "
-                "así como cualquier dependencia o efecto sobre la operación. Cada dato expuesto forma parte del "
-                "sustento del caso y debe contrastarse con la documentación y los anexos disponibles, sin inferir "
-                "hechos no acreditados."
-            )
-            pending = (
-                "Puntos pendientes o limitaciones: no se identifican vacíos adicionales más allá de lo expresado; "
-                "en caso de que surjan inconsistencias, deberán documentarse y resolverse antes de la decisión o el desembolso."
-                if "no se informó" not in preserved.casefold()
-                else "Puntos pendientes o limitaciones: la información presenta vacíos o aspectos no informados que deben "
-                "ser completados, aclarados y sustentados antes de la decisión o el desembolso."
-            )
-            body = f"{intro}\n\n{detail}\n\n{pending}"
+            preserved = "\n".join(line.rstrip() for line in text.splitlines()).strip()
+            has_pending = any(token in preserved.casefold() for token in ["pendiente", "por confirmar", "por definir", "no informado", "sin información", "sin informacion", "n/a"])
+            body = f"Contenido registrado ({focus}):\n{preserved}" if focus else f"Contenido registrado:\n{preserved}"
+            body += "\n\nAnálisis y contexto: la información consignada se considera en función de su relevancia para la capacidad de pago, la estructura de riesgo, los mitigantes y la coherencia de la operación, dentro del alcance de la evidencia disponible."
+            if has_pending:
+                body += "\nPendiente de confirmación: existen elementos no informados o sujetos a validación que deben sustentarse y trazarse en el expediente."
         else:
-            body = (
-                f"Información disponible: {missing}\n\n"
-                "Análisis y contexto: ante la ausencia de detalle, no es posible concluir sobre todos los aspectos relevantes "
-                "de esta sección con la evidencia proporcionada. Esta limitación debe ser tratada como un punto de atención "
-                "para auditoría y para el comité, evitando supuestos o inferencias no sustentadas.\n\n"
-                "Puntos pendientes o limitaciones: corresponde obtener, validar y documentar la información faltante antes de "
-                "adoptar una decisión definitiva o ejecutar el desembolso."
-            )
+            body = f"{missing}"
+            body += f"\n\nAnálisis y contexto: la ausencia de información limita la evaluación de {focus}." if focus else "\n\nAnálisis y contexto: la ausencia de información limita la evaluación de esta sección."
+            body += "\nPendiente de confirmación: completar, validar y documentar la información aplicable con la fuente correspondiente."
         if attachment_name:
-            body += (
-                f"\n\nSoporte documental: se adjunta el archivo «{attachment_name}» como respaldo de esta sección. "
-                "Su contenido debe conciliarse con el análisis narrativo y considerarse en la evaluación integral."
-            )
+            body += f"\n\nSoporte documental: archivo incorporado «{attachment_name}»; su contenido debe conciliarse con la información consignada."
         return body
 
     try:
@@ -645,18 +645,45 @@ def generate_acta(
     except (TypeError, ValueError):
         amount_value = 0.0
 
-    profile_text = (profile or "").strip() or client_template["perfil"]
-    financial_body = section_content(analisis_financiero, "No se informó el análisis financiero en la información disponible.", analisis_financiero_attachment)
-    guarantees_body = section_content(garantias, "No se informó la estructura de garantías en la información disponible.", garantias_attachment)
-    conditions_body = section_content(condiciones, "No se informaron las condiciones propuestas en la información disponible.", condiciones_attachment)
-    observations_body = section_content(observations, "No se registraron observaciones adicionales en la información disponible.")
-    recommendation_body = section_content(recommendation, "No se informó una recomendación expresa para el comité.")
-    profile_body = section_content(profile_text, "No se informó un perfil detallado del cliente en la información disponible.")
+    profile_body = section_content(
+        profile,
+        "No informado: no se registró un perfil detallado del cliente.",
+        "",
+        "perfil del cliente, actividad y factores cualitativos relevantes",
+    )
+    financial_body = section_content(
+        analisis_financiero,
+        "No informado: no se registró información detallada del análisis financiero y capacidad de pago.",
+        analisis_financiero_attachment,
+        "situación financiera, ingresos, obligaciones, flujos e indicadores de capacidad de pago",
+    )
+    guarantees_body = section_content(
+        garantias,
+        "No informado: no se registró información detallada de garantías y mitigantes.",
+        garantias_attachment,
+        "naturaleza, cobertura, valor y condiciones de las garantías o mitigantes",
+    )
+    conditions_body = section_content(
+        condiciones,
+        "No informado: no se registraron las condiciones propuestas de la operación.",
+        condiciones_attachment,
+        "monto, plazo, tasa, forma de pago, destino y condiciones/controles aplicables",
+    )
+    observations_body = section_content(
+        observations,
+        "No informado: no se registraron observaciones adicionales.",
+        "",
+        "hallazgos, alertas, inconsistencias y aspectos de seguimiento",
+    )
+    recommendation_body = section_content(
+        recommendation,
+        "Pendiente de confirmación: no se registró una recomendación expresa para el comité.",
+        "",
+        "postura crediticia propuesta y su fundamento",
+    )
 
     identification = (
-        f"El presente acta documenta el análisis crediticio de {client_name} con un enfoque detallado y verificable para revisión de auditoría. "
-        f"La operación fue presentada como {client_type or 'tipo de cliente no informado'}, dentro de la categoría de {analysis_type or 'análisis no informado'}. "
-        f"Esta identificación permite precisar el contexto jurídico, económico y financiero del caso y delimitar las variables relevantes para la decisión.\n\n"
+        f"El presente acta consolida la información registrada para el análisis crediticio de {client_name}, con base en los datos y soportes disponibles al momento de su emisión.\n\n"
         f"- Cliente: {client_name}\n"
         f"- Tipo de cliente: {client_type or 'No informado'}\n"
         f"- Tipo de análisis: {analysis_type or 'No informado'}\n"
@@ -665,10 +692,14 @@ def generate_acta(
         f"- PROPONENTE: {proponente or 'No informado'}\n"
         f"- Grupo económico: {grupo_economico or 'No informado'}\n"
         f"- Nivel de riesgo: {risk_level or 'No informado'}\n\n"
-        "Cada uno de estos elementos debe leerse de manera conjunta: la línea define el producto y su finalidad, el monto cuantifica la exposición propuesta, "
-        "el proponente sustenta el origen de la solicitud y el nivel de riesgo orienta la severidad del análisis. No deben extraerse conclusiones aisladas sin "
-        "considerar la capacidad de pago, las garantías, las condiciones y la evidencia documental disponible."
+        "Análisis y contexto: los datos de identificación delimitan la operación, la exposición solicitada y los parámetros relevantes para la evaluación integral del caso."
     )
+
+    anexos = [
+        f"financiero: {'sí (' + analisis_financiero_attachment + ')' if analisis_financiero_attachment else 'no'}",
+        f"garantías: {'sí (' + garantias_attachment + ')' if garantias_attachment else 'no'}",
+        f"condiciones: {'sí (' + condiciones_attachment + ')' if condiciones_attachment else 'no'}",
+    ]
 
     return f"""
 COMISIÓN DE CRÉDITO – COMITÉ EJECUTIVO
@@ -681,21 +712,15 @@ IDENTIFICACIÓN DEL CLIENTE Y NATURALEZA DE LA PRESENTACIÓN
 
 PERFIL DEL CLIENTE
 
-{client_template['perfil']}
-
 {profile_body}
 
 ANÁLISIS FINANCIERO Y CAPACIDAD DE PAGO
-
-{analysis_template['resumen']}
 
 {financial_body}
 
 NIVEL DE RIESGO
 
-El nivel de riesgo registrado para la operación es {risk_level or 'no informado'}. {client_template['riesgo']}
-
-El riesgo debe interpretarse como una variable integral que considera indicadores financieros, comportamiento histórico, estabilidad de ingresos, concentración, calidad de garantías y factores externos. Esta calificación no reemplaza la verificación documental ni el seguimiento continuo.
+Nivel de riesgo registrado: {risk_level or 'No informado'}. La calificación debe interpretarse en conjunto con la información financiera, las garantías, las condiciones y los hallazgos documentados.
 
 GARANTÍAS Y MITIGANTES
 
@@ -713,17 +738,16 @@ RECOMENDACIÓN Y FUNDAMENTO
 
 {recommendation_body}
 
-La recomendación debe entenderse como resultado de la evaluación conjunta de toda la información disponible, verificando que monto, línea, riesgo, garantías y condiciones sean compatibles con la capacidad real de pago. {analysis_template['recomendacion']}
-
 ANÁLISIS GRÁFICO E HISTÓRICO
 
-- Datos cuantitativos del caso: monto solicitado ${amount_value:,.2f}; anexos registrados (financiero: {"sí" if analisis_financiero_attachment else "no"}, garantías: {"sí" if garantias_attachment else "no"}, condiciones: {"sí" if condiciones_attachment else "no"}).
+- Monto solicitado: ${amount_value:,.2f}
+- Anexos registrados: {', '.join(anexos)}.
 
-Esta sección resume los datos cuantitativos disponibles en el expediente. Los gráficos de tendencia o históricos detallados se incluyen en el documento Word generado cuando existen series o valores numéricos extraíbles de las fuentes del acta; en ausencia de series temporales explícitas, se presentan los valores e indicadores cuantitativos disponibles sin omitir información. Cualquier dato no disponible se señala como limitación para auditoría.
+Análisis y contexto: se resumen los datos cuantitativos y soportes disponibles en el expediente; la información gráfica o numérica detallada, cuando exista en anexos, debe considerarse junto con las secciones narrativas del acta.
 
 CONCLUSIÓN
 
-En conclusión, la decisión debe sustentarse en la evidencia incorporada, la coherencia del análisis narrativo y gráfico, y la resolución de los puntos pendientes antes del desembolso. No se deberán inferir hechos, montos, garantías u obligaciones no acreditados en la documentación revisada.
+{build_conclusion_statement(recommendation, condiciones, client_name)}
 """.strip()
 
 
