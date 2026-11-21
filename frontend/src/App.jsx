@@ -30,7 +30,10 @@ import {
   SECTION_DEFINITIONS,
   buildCaseQuantitativeSummary,
   buildConclusionStatement,
+  buildExecutiveSummary,
   buildNarrativeBlocks,
+  buildPendingItems,
+  buildTraceability,
   chartToPng,
   collectValidationIssues,
   formatCurrency,
@@ -382,7 +385,7 @@ function App() {
     const clientName = formatNarrativeValue(data.clientName, 'Cliente no informado')
     const context = { clientName, amount: data.amount, data }
 
-    const blocksToParagraphs = (blocks, { justify = true, spacingAfter = 160 } = {}) => blocks.flatMap((block) => {
+    const blocksToParagraphs = (blocks, { justify = true, spacingAfter = 140 } = {}) => (blocks || []).flatMap((block) => {
       if (block.type === 'bullet') {
         return [new Paragraph({
           text: block.text,
@@ -398,7 +401,7 @@ function App() {
       })]
     })
 
-    const justifiedParagraph = (text, { spacing = { after: 160 }, bold = false } = {}) => new Paragraph({
+    const justifiedParagraph = (text, { spacing = { after: 140 }, bold = false } = {}) => new Paragraph({
       children: [new TextRun({ text, bold })],
       alignment: AlignmentType.JUSTIFIED,
       spacing,
@@ -434,6 +437,9 @@ function App() {
     }))
 
     const validationIssues = collectValidationIssues(data, attachmentEntries)
+    const pendingItems = buildPendingItems(data, attachmentEntries)
+    const traceability = buildTraceability(data, attachmentEntries)
+    const exec = buildExecutiveSummary(data)
     const caseSummary = buildCaseQuantitativeSummary(data, attachmentEntries)
     const allChartDatasets = attachmentEntries.flatMap((entry) => (entry.chartData.datasets || []).map((dataset) => ({ ...dataset, source: entry.label })))
 
@@ -463,6 +469,25 @@ function App() {
       })),
     })
 
+    const executiveRows = [
+      ['Cliente', exec.client],
+      ['Exposición / monto solicitado', exec.amountText],
+      ['Línea / producto', exec.line],
+      ['Tipo de análisis', exec.analysisType],
+      ['Nivel de riesgo registrado', exec.risk],
+      ['Completitud del expediente', exec.completeness],
+      ['Postura crediticia documentada', exec.decisionLabel],
+    ]
+    const executiveTable = new Table({
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      rows: executiveRows.map(([label, value]) => new TableRow({
+        children: [
+          new TableCell({ width: { size: 40, type: WidthType.PERCENTAGE }, children: [new Paragraph({ children: [new TextRun({ text: label, bold: true })], spacing: { after: 40 } })] }),
+          new TableCell({ width: { size: 60, type: WidthType.PERCENTAGE }, children: [new Paragraph({ children: [new TextRun({ text: String(value || 'No informado') })], spacing: { after: 40 } })] }),
+        ],
+      })),
+    })
+
     const children = [
       new Paragraph({
         alignment: AlignmentType.CENTER,
@@ -484,14 +509,27 @@ function App() {
         children: [new TextRun({ text: `Cliente: ${clientName}`, size: 24, bold: true })],
       }),
       new Paragraph({ children: [new TextRun({ text: `Fecha de emisión: ${new Date().toLocaleDateString('es-EC')}`, bold: true })], spacing: { after: 240 } }),
+
+      new Paragraph({ text: 'Resumen ejecutivo', heading: HeadingLevel.HEADING_1 }),
+      justifiedParagraph('Síntesis integral del caso con base en la información registrada y los soportes disponibles, destinada a facilitar la deliberación del comité y la trazabilidad de la decisión.'),
+      executiveTable,
+      new Paragraph({ text: '', spacing: { after: 120 } }),
+      justifiedParagraph(buildConclusionStatement(data.recommendation, data.conditions, clientName)),
+
+      new Paragraph({ children: [new PageBreak()] }),
       new Paragraph({ text: 'Tabla de contenido', heading: HeadingLevel.HEADING_1 }),
       new TableOfContents('Tabla de contenido', { hyperlink: true, headingStyleRange: '1-3' }),
       new Paragraph({ children: [new PageBreak()] }),
-      new Paragraph({ text: 'Identificación del cliente y alcance del análisis', heading: HeadingLevel.HEADING_1 }),
-      justifiedParagraph('El presente acta consolida la información registrada para el caso y los soportes incorporados al expediente, con el fin de sustentar la deliberación y dejar trazabilidad de los elementos considerados en el análisis crediticio.'),
+
+      new Paragraph({ text: 'Identificación del cliente y naturaleza de la presentación', heading: HeadingLevel.HEADING_1 }),
+      justifiedParagraph('El presente acta documenta de manera detallada el análisis crediticio del caso, consolidando los datos, la evaluación realizada y las conclusiones sustentadas en la evidencia disponible al momento de su emisión.'),
       identificationTable,
       new Paragraph({ text: '', spacing: { after: 120 } }),
-      justifiedParagraph('El alcance del análisis se circunscribe a los datos y documentos disponibles al momento de la emisión. Los aspectos no informados o pendientes se señalan explícitamente en las secciones correspondientes y, cuando aplica, en la validación de consistencia.'),
+
+      new Paragraph({ text: 'Alcance, metodología y criterios de análisis', heading: HeadingLevel.HEADING_1 }),
+      justifiedParagraph('Alcance: el análisis se circunscribe a la información consignada en el formulario, la narrativa de las secciones y los anexos incorporados al expediente. Los elementos no informados, no verificables o pendientes se señalan expresamente como limitaciones, sin inferir hechos no acreditados.'),
+      justifiedParagraph('Metodología y criterios: la evaluación se desarrolla de forma integral considerando dimensiones cualitativas y cuantitativas: perfil y contexto del solicitante, situación financiera y capacidad de pago, nivel de riesgo, garantías y mitigantes, estructura y condiciones de la operación, observaciones/hallazgos y recomendación. Cada conclusión debe ser consistente con la evidencia disponible y trazable a su fuente.'),
+      justifiedParagraph('Principios de rigor y trazabilidad: se exige coherencia entre monto/exposición, capacidad de repago, mitigantes y condiciones; identificación de supuestos y limitaciones; y definición de pendientes, responsables o condiciones cuando la información sea insuficiente o la decisión lo requiera.'),
     ]
 
     for (const section of SECTION_DEFINITIONS) {
@@ -500,12 +538,37 @@ function App() {
       children.push(...blocksToParagraphs(blocks))
     }
 
+    children.push(new Paragraph({ text: 'Evaluación integral del riesgo y capacidad de pago', heading: HeadingLevel.HEADING_1 }))
+    const riskNarrative = [
+      `Nivel de riesgo registrado: ${metricLabel(data.risk)}. La calificación debe interpretarse de manera integral y no aislada.`,
+      `Capacidad de pago y exposición: se evalúa en función de la información financiera disponible frente al monto solicitado (${formatCurrency(data.amount) || 'no informado'}) y la estructura propuesta; la ausencia de información suficiente limita la conclusividad del análisis.`,
+      `Mitigantes y estructura: las garantías, condiciones, controles y covenants (cuando existen) deben valorarse por su cobertura, ejecutabilidad y alineación con la fuente primaria de repago.`,
+      `Hallazgos y coherencia: las observaciones y la recomendación deben ser consistentes con el perfil, el análisis financiero, el riesgo y los mitigantes documentados.`,
+    ]
+    riskNarrative.forEach((text) => children.push(justifiedParagraph(text)))
+
     const availableAttachments = attachmentEntries.filter((entry) => entry.name)
+    children.push(new Paragraph({ text: 'Trazabilidad y soportes del expediente', heading: HeadingLevel.HEADING_1 }))
+    if (traceability.length) {
+      const traceRows = [
+        new TableRow({
+          children: ['Elemento', 'Fuente / referencia', 'Estado', 'Detalle'].map((heading) => new TableCell({
+            children: [new Paragraph({ children: [new TextRun({ text: heading, bold: true })], spacing: { after: 40 } })],
+          })),
+        }),
+        ...traceability.map((row) => new TableRow({
+          children: [row.element, row.source, row.status, row.detail].map((value) => new TableCell({
+            children: [new Paragraph({ children: [new TextRun({ text: String(value || '') })], spacing: { after: 40 }, alignment: AlignmentType.JUSTIFIED })],
+          })),
+        })),
+      ]
+      children.push(new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: traceRows }))
+      children.push(new Paragraph({ text: '', spacing: { after: 120 } }))
+    }
     if (availableAttachments.length) {
-      children.push(new Paragraph({ text: 'Soportes del expediente', heading: HeadingLevel.HEADING_1 }))
       for (const entry of availableAttachments) {
-        children.push(new Paragraph({ text: `${entry.label}: ${entry.name}`, heading: HeadingLevel.HEADING_2 }))
-        children.push(justifiedParagraph(`Archivo incorporado como soporte de ${entry.label.toLocaleLowerCase('es')}. Su contenido debe considerarse en conjunto con la información consignada en el acta.`))
+        children.push(new Paragraph({ text: `Detalle de soporte: ${entry.label} (${entry.name})`, heading: HeadingLevel.HEADING_2 }))
+        children.push(justifiedParagraph('El archivo forma parte de la evidencia del caso; su contenido debe conciliarse con la información consignada y las conclusiones del acta.'))
         if ((entry.chartData.summary || []).length) {
           const sheetBullets = entry.chartData.summary.slice(0, 12).map((item) => ({
             type: 'bullet',
@@ -513,9 +576,11 @@ function App() {
           }))
           children.push(...blocksToParagraphs(sheetBullets, { spacingAfter: 120 }))
         } else {
-          children.push(justifiedParagraph('No se identificaron tablas o series numéricas estructuradas para extracción automática en este anexo; corresponde su revisión directa como parte del expediente.'))
+          children.push(justifiedParagraph('No se identificaron tablas o series numéricas estructuradas para extracción automática; corresponde revisión directa del anexo.'))
         }
       }
+    } else {
+      children.push(justifiedParagraph('No se registraron anexos incorporados al expediente en las secciones de soporte definidas.'))
     }
 
     if (caseSummary.length || allChartDatasets.length) {
@@ -561,31 +626,38 @@ function App() {
         }).join(' | ')
         const unitNote = dataset.unit ? ` Unidad/referencia: ${dataset.unit}.` : ''
         const periodNote = dataset.labels?.length ? ` Periodos/categorías: ${dataset.labels.join(', ')}.` : ''
-        children.push(justifiedParagraph(`Fuente: ${dataset.source || 'anexo'}.${unitNote}${periodNote} Series: ${seriesDetail}. La interpretación debe realizarse en función de la tendencia/composición observada y su relación con la capacidad de pago, la exposición y los mitigantes del caso.`))
+        children.push(justifiedParagraph(`Fuente: ${dataset.source || 'anexo'}.${unitNote}${periodNote} Series: ${seriesDetail}. La interpretación debe considerar tendencia/composición, consistencia con el expediente y su impacto en capacidad de pago, exposición y mitigantes.`))
       }
+    } else {
+      children.push(new Paragraph({ text: 'Información cuantitativa y evidencia gráfica', heading: HeadingLevel.HEADING_1 }))
+      children.push(justifiedParagraph('No se identificaron datos cuantitativos estructurados o series gráficas extraíbles de los anexos disponibles. La evaluación cuantitativa queda supeditada a la información consignada en las secciones narrativas y a la revisión directa de los soportes.'))
     }
 
-    if (validationIssues.length) {
-      children.push(new Paragraph({ text: 'Validación y consistencia del expediente', heading: HeadingLevel.HEADING_1 }))
-      children.push(justifiedParagraph('Se identificaron observaciones de validación que deben considerarse para la deliberación y la trazabilidad del caso:'))
-      const issueRows = [
+    children.push(new Paragraph({ text: 'Pendientes, condiciones y plan de seguimiento', heading: HeadingLevel.HEADING_1 }))
+    if (pendingItems.length) {
+      justifiedParagraph('A continuación se detallan las observaciones, pendientes y condiciones que requieren gestión para asegurar la suficiencia, consistencia y trazabilidad del expediente:')
+      children.push(justifiedParagraph('A continuación se detallan las observaciones, pendientes y condiciones que requieren gestión para asegurar la suficiencia, consistencia y trazabilidad del expediente:'))
+      const pendingRows = [
         new TableRow({
-          children: ['Dato/área afectada', 'Fuente', 'Observación', 'Acción de validación requerida'].map((heading) => new TableCell({
+          children: ['Área / dato afectado', 'Fuente', 'Hallazgo o pendiente', 'Acción requerida / seguimiento'].map((heading) => new TableCell({
             children: [new Paragraph({ children: [new TextRun({ text: heading, bold: true })], spacing: { after: 40 } })],
           })),
         }),
-        ...validationIssues.map((issue) => new TableRow({
-          children: [issue.field, issue.source, issue.detail, issue.action].map((value) => new TableCell({
+        ...pendingItems.map((item) => new TableRow({
+          children: [item.area, item.source, item.detail, item.action].map((value) => new TableCell({
             children: [new Paragraph({ children: [new TextRun({ text: String(value || '') })], spacing: { after: 40 }, alignment: AlignmentType.JUSTIFIED })],
           })),
         })),
       ]
-      children.push(new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: issueRows }))
+      children.push(new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: pendingRows }))
       children.push(new Paragraph({ text: '', spacing: { after: 120 } }))
+    } else {
+      children.push(justifiedParagraph('No se identificaron pendientes o inconsistencias explícitas a partir de las validaciones automáticas y la información registrada. Subsiste la obligación de verificar la documentación soporte, la vigencia de la información y el cumplimiento de políticas y condiciones aplicables.'))
     }
 
     children.push(new Paragraph({ text: 'Conclusión y recomendación crediticia', heading: HeadingLevel.HEADING_1 }))
     children.push(justifiedParagraph(buildConclusionStatement(data.recommendation, data.conditions, clientName)))
+    children.push(justifiedParagraph('La presente conclusión se emite con base en la evidencia disponible y documentada. Su validez está condicionada a la exactitud, integridad y trazabilidad de la información, al cierre o gestión de los pendientes identificados y a la verificación de que no existan hechos o datos relevantes adicionales no considerados en este acta.'))
 
     const documentFile = new Document({
       styles: {
@@ -1132,16 +1204,44 @@ function App() {
               </div>
             </div>
 
+            {(() => {
+              const exec = buildExecutiveSummary(form)
+              return (
+                <section className="summary-block">
+                  <h3>Resumen ejecutivo</h3>
+                  <ul>
+                    <li><strong>Cliente:</strong> {exec.client}</li>
+                    <li><strong>Exposición / monto solicitado:</strong> {exec.amountText}</li>
+                    <li><strong>Línea / producto:</strong> {exec.line}</li>
+                    <li><strong>Tipo de análisis:</strong> {exec.analysisType}</li>
+                    <li><strong>Nivel de riesgo registrado:</strong> {exec.risk}</li>
+                    <li><strong>Completitud del expediente:</strong> {exec.completeness}</li>
+                    <li><strong>Postura crediticia documentada:</strong> {exec.decisionLabel}</li>
+                  </ul>
+                  <p>{buildConclusionStatement(form.recommendation, form.conditions, form.clientName || 'el cliente evaluado')}</p>
+                </section>
+              )
+            })()}
+
             <section className="summary-block">
-              <h3>Identificación y alcance</h3>
+              <h3>Identificación y naturaleza de la presentación</h3>
               <ul>
-                <li>Cliente: {formatNarrativeValue(form.clientName, 'No informado')}</li>
-                <li>Tipo de cliente: {formatNarrativeValue(form.clientType, 'No informado')}</li>
-                <li>Tipo de análisis: {formatNarrativeValue(form.analysisType, 'No informado')}</li>
-                <li>Proponente: {formatNarrativeValue(form.proposal, 'No informado')}</li>
-                <li>Grupo económico: {formatNarrativeValue(form.group, 'No informado')}</li>
+                <li><strong>Cliente:</strong> {formatNarrativeValue(form.clientName, 'No informado')}</li>
+                <li><strong>Tipo de cliente:</strong> {formatNarrativeValue(form.clientType, 'No informado')}</li>
+                <li><strong>Tipo de análisis:</strong> {formatNarrativeValue(form.analysisType, 'No informado')}</li>
+                <li><strong>Línea / producto:</strong> {formatNarrativeValue(form.line, 'No informado')}</li>
+                <li><strong>Monto solicitado:</strong> {formatCurrency(form.amount) || 'No informado'}</li>
+                <li><strong>Proponente:</strong> {formatNarrativeValue(form.proposal, 'No informado')}</li>
+                <li><strong>Grupo económico:</strong> {formatNarrativeValue(form.group, 'No informado')}</li>
+                <li><strong>Nivel de riesgo:</strong> {formatNarrativeValue(form.risk, 'No informado')}</li>
               </ul>
-              <p>El alcance se limita a la información y soportes disponibles al momento de la emisión; los datos no informados o pendientes se señalan explícitamente.</p>
+            </section>
+
+            <section className="summary-block">
+              <h3>Alcance, metodología y criterios de análisis</h3>
+              <p>Alcance: el análisis se circunscribe a la información consignada en el formulario, la narrativa de las secciones y los anexos incorporados al expediente. Los elementos no informados, no verificables o pendientes se señalan expresamente como limitaciones, sin inferir hechos no acreditados.</p>
+              <p>Metodología y criterios: la evaluación considera de forma integral el perfil y contexto del solicitante, la situación financiera y capacidad de pago, el nivel de riesgo, las garantías y mitigantes, la estructura/condiciones de la operación, las observaciones y la recomendación. Cada conclusión debe ser coherente con la evidencia disponible y trazable a su fuente.</p>
+              <p>Principios de rigor: se exige consistencia entre monto/exposición, capacidad de repago, mitigantes y condiciones; identificación de supuestos y limitaciones; y definición de pendientes o condiciones cuando corresponda.</p>
             </section>
 
             {SECTION_DEFINITIONS.map((section) => (
@@ -1151,22 +1251,65 @@ function App() {
               </section>
             ))}
 
+            <section className="summary-block">
+              <h3>Evaluación integral del riesgo y capacidad de pago</h3>
+              <ul>
+                <li><strong>Nivel de riesgo registrado:</strong> {formatNarrativeValue(form.risk, 'No informado')}. La calificación debe interpretarse de manera integral y no aislada.</li>
+                <li><strong>Capacidad de pago y exposición:</strong> se evalúa frente al monto solicitado ({formatCurrency(form.amount) || 'no informado'}) y la estructura propuesta; la información insuficiente limita la conclusividad del análisis.</li>
+                <li><strong>Mitigantes y estructura:</strong> garantías, condiciones y controles deben valorarse por cobertura, ejecutabilidad y alineación con la fuente primaria de repago.</li>
+                <li><strong>Coherencia:</strong> observaciones y recomendación deben ser consistentes con perfil, análisis financiero, riesgo y mitigantes documentados.</li>
+              </ul>
+            </section>
+
             {(() => {
               const previewAttachments = attachmentSections.map(({ key, label }) => {
                 const name = attachedFiles[key]?.name || (!removedAttachments.includes(key) && savedAttachments[key]?.filename) || ''
-                return { key, label, name, blob: Boolean(attachedFiles[key]?.file || (!removedAttachments.includes(key) && savedAttachments[key])) }
+                return { key, label, name, filename: name, blob: Boolean(attachedFiles[key]?.file || (!removedAttachments.includes(key) && savedAttachments[key])), chartData: { datasets: [], summary: [] } }
               })
-              const metrics = buildCaseQuantitativeSummary(form, previewAttachments)
-              return metrics.length ? (
+              const traceability = buildTraceability(form, previewAttachments)
+              const available = previewAttachments.filter((entry) => entry.name)
+              return (
                 <section className="summary-block">
-                  <h3>Información cuantitativa disponible</h3>
+                  <h3>Trazabilidad y soportes del expediente</h3>
                   <ul>
-                    {metrics.map((item, index) => (
-                      <li key={`q-${index}`}>{item.label}: {item.value}</li>
+                    {traceability.map((row, index) => (
+                      <li key={`t-${index}`}><strong>{row.element}</strong> — {row.source} [{row.status}]: {row.detail}</li>
                     ))}
                   </ul>
+                  {available.length ? (
+                    <ul>
+                      {available.map((entry) => (
+                        <li key={`a-${entry.key}`}><strong>Soporte incorporado:</strong> {entry.label} — {entry.name}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p>No se registraron anexos incorporados al expediente en las secciones de soporte definidas.</p>
+                  )}
                 </section>
-              ) : null
+              )
+            })()}
+
+            {(() => {
+              const previewAttachments = attachmentSections.map(({ key, label }) => {
+                const name = attachedFiles[key]?.name || (!removedAttachments.includes(key) && savedAttachments[key]?.filename) || ''
+                return { key, label, name, filename: name, blob: Boolean(attachedFiles[key]?.file || (!removedAttachments.includes(key) && savedAttachments[key])), chartData: { datasets: [], summary: [] } }
+              })
+              const metrics = buildCaseQuantitativeSummary(form, previewAttachments)
+              return (
+                <section className="summary-block">
+                  <h3>Información cuantitativa y evidencia disponible</h3>
+                  {metrics.length ? (
+                    <ul>
+                      {metrics.map((item, index) => (
+                        <li key={`q-${index}`}><strong>{item.label}:</strong> {item.value}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p>No se dispone de indicadores cuantitativos registrados.</p>
+                  )}
+                  <p>La evidencia gráfica y el detalle de series extraíbles de anexos se incluyen en el documento Word cuando corresponda; en la vista previa se presenta la síntesis disponible.</p>
+                </section>
+              )
             })()}
 
             {(() => {
@@ -1176,22 +1319,27 @@ function App() {
                 name: attachedFiles[key]?.name || (!removedAttachments.includes(key) && savedAttachments[key]?.filename) || '',
                 chartData: { datasets: [], summary: [] },
               }))
-              const issues = collectValidationIssues(form, previewAttachmentEntries)
-              return issues.length ? (
+              const pending = buildPendingItems(form, previewAttachmentEntries)
+              return (
                 <section className="summary-block">
-                  <h3>Validación y consistencia</h3>
-                  <ul>
-                    {issues.map((issue, index) => (
-                      <li key={`v-${index}`}><strong>{issue.field}</strong> ({issue.source}): {issue.detail} Acción: {issue.action}</li>
-                    ))}
-                  </ul>
+                  <h3>Pendientes, condiciones y plan de seguimiento</h3>
+                  {pending.length ? (
+                    <ul>
+                      {pending.map((item, index) => (
+                        <li key={`p-${index}`}><strong>{item.area}</strong> ({item.source}): {item.detail} <em>Acción requerida/seguimiento:</em> {item.action}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p>No se identificaron pendientes o inconsistencias explícitas a partir de las validaciones automáticas y la información registrada. Subsiste la obligación de verificar la documentación soporte, la vigencia de la información y el cumplimiento de políticas y condiciones aplicables.</p>
+                  )}
                 </section>
-              ) : null
+              )
             })()}
 
             <section className="summary-block">
               <h3>Conclusión y recomendación crediticia</h3>
               <p>{buildConclusionStatement(form.recommendation, form.conditions, form.clientName || 'el cliente evaluado')}</p>
+              <p>La presente conclusión se emite con base en la evidencia disponible y documentada. Su validez está condicionada a la exactitud, integridad y trazabilidad de la información, al cierre o gestión de los pendientes identificados y a la verificación de que no existan hechos o datos relevantes adicionales no considerados en este acta.</p>
             </section>
           </div>
         </aside>
