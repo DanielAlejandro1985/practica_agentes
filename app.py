@@ -470,11 +470,18 @@ def generate_with_openai():
 
     system_prompt = (
         "Eres un analista de crédito. Analiza únicamente la información proporcionada "
-        "y genera un acta profesional en español. No inventes datos. Devuelve un JSON "
-        "estricto con exactamente estas claves: clientName, clientType, analysisType, "
-        "line, proposal, amount, risk, group, profile, financial, guarantees, "
-        "conditions, recommendation, observations. Usa strings; amount puede ser string "
-        "numérico sin símbolos. Para datos ausentes usa una cadena vacía."
+        "y genera un acta profesional en español para revisión de auditoría, con explicaciones "
+        "exhaustivas y pormenorizadas. No inventes datos. Cada campo narrativo debe contener "
+        "párrafos bien estructurados (contexto, análisis, implicaciones, limitaciones y conclusión) "
+        "que expliquen el significado de la información hasta el mínimo detalle. "
+        "Cuando sea útil conservar puntos clave, incluye viñetas además de los párrafos explicativos; "
+        "no entregues solo viñetas ni ideas sueltas. Para perfil, análisis financiero, garantías, "
+        "condiciones, recomendación y observaciones desarrolla la relación con el riesgo y la capacidad "
+        "de pago, los soportes o anexos relevantes, los puntos pendientes y el fundamento de cada conclusión. "
+        "Si no hay datos, indícalo claramente como información no disponible o pendiente sin inferir hechos. "
+        "Devuelve un JSON estricto con exactamente estas claves: clientName, clientType, analysisType, "
+        "line, proposal, amount, risk, group, profile, financial, guarantees, conditions, recommendation, "
+        "observations. Usa strings; amount puede ser string numérico sin símbolos. Para datos ausentes usa una cadena vacía."
     )
     user_prompt = json.dumps({
         "presentationText": presentation_text,
@@ -571,63 +578,153 @@ def generate_acta(
     analisis_financiero_attachment: str = "",
     garantias_attachment: str = "",
     condiciones_attachment: str = "",
+    profile: str = "",
 ) -> str:
-    client_template = CLIENT_TEMPLATES.get(client_type.lower(), CLIENT_TEMPLATES["persona natural"])
-    analysis_template = ANALYSIS_TEMPLATES.get(analysis_type.lower(), ANALYSIS_TEMPLATES["crédito ordinario"])
+    def normalize_key(value: str) -> str:
+        return (value or "").strip().casefold()
 
-    def normalize_block(value: str, default: str) -> str:
-        return value.strip() if value and value.strip() else default
+    client_template = CLIENT_TEMPLATES.get(
+        normalize_key(client_type),
+        {
+            "perfil": "Cliente cuya información disponible debe evaluarse de forma integral considerando sus ingresos, obligaciones, patrimonio y comportamiento financiero.",
+            "riesgo": "Se revisa la consistencia de la información, la estabilidad de los ingresos, las obligaciones vigentes y los factores que puedan afectar el cumplimiento.",
+        },
+    )
+    analysis_template = ANALYSIS_TEMPLATES.get(
+        normalize_key(analysis_type),
+        {
+            "resumen": "El caso se analiza con base en la información disponible, verificando la coherencia entre monto, capacidad de pago, garantías y condiciones.",
+            "recomendacion": "Se recomienda resolver conforme a la evidencia disponible, dejando constancia de pendientes, mitigantes y condiciones de seguimiento.",
+        },
+    )
 
-    def add_attachment(block: str, attachment: str, label: str) -> str:
-        if not attachment:
-            return block
-        return f"{block}\n{label}: {attachment}"
+    def section_content(value: str, missing: str, attachment_name: str = "") -> str:
+        text = (value or "").strip()
+        if text:
+            lines = [line.rstrip() for line in text.splitlines()]
+            preserved = "\n".join(lines).strip()
+            intro = (
+                "A continuación se presenta la información disponible para esta sección, "
+                "conservando los puntos o viñetas registrados y complementándolos con un "
+                "análisis narrativo detallado para facilitar la revisión de auditoría."
+            )
+            detail = (
+                f"Detalle de la información proporcionada:\n{preserved}\n\n"
+                "Análisis y contexto: la información anterior debe interpretarse de manera integral, "
+                "considerando su alcance, consistencia, implicaciones sobre la capacidad de pago y el riesgo, "
+                "así como cualquier dependencia o efecto sobre la operación. Cada dato expuesto forma parte del "
+                "sustento del caso y debe contrastarse con la documentación y los anexos disponibles, sin inferir "
+                "hechos no acreditados."
+            )
+            pending = (
+                "Puntos pendientes o limitaciones: no se identifican vacíos adicionales más allá de lo expresado; "
+                "en caso de que surjan inconsistencias, deberán documentarse y resolverse antes de la decisión o el desembolso."
+                if "no se informó" not in preserved.casefold()
+                else "Puntos pendientes o limitaciones: la información presenta vacíos o aspectos no informados que deben "
+                "ser completados, aclarados y sustentados antes de la decisión o el desembolso."
+            )
+            body = f"{intro}\n\n{detail}\n\n{pending}"
+        else:
+            body = (
+                f"Información disponible: {missing}\n\n"
+                "Análisis y contexto: ante la ausencia de detalle, no es posible concluir sobre todos los aspectos relevantes "
+                "de esta sección con la evidencia proporcionada. Esta limitación debe ser tratada como un punto de atención "
+                "para auditoría y para el comité, evitando supuestos o inferencias no sustentadas.\n\n"
+                "Puntos pendientes o limitaciones: corresponde obtener, validar y documentar la información faltante antes de "
+                "adoptar una decisión definitiva o ejecutar el desembolso."
+            )
+        if attachment_name:
+            body += (
+                f"\n\nSoporte documental: se adjunta el archivo «{attachment_name}» como respaldo de esta sección. "
+                "Su contenido debe conciliarse con el análisis narrativo y considerarse en la evaluación integral."
+            )
+        return body
 
-    acta = f"""
+    try:
+        amount_value = float(amount)
+    except (TypeError, ValueError):
+        amount_value = 0.0
+
+    profile_text = (profile or "").strip() or client_template["perfil"]
+    financial_body = section_content(analisis_financiero, "No se informó el análisis financiero en la información disponible.", analisis_financiero_attachment)
+    guarantees_body = section_content(garantias, "No se informó la estructura de garantías en la información disponible.", garantias_attachment)
+    conditions_body = section_content(condiciones, "No se informaron las condiciones propuestas en la información disponible.", condiciones_attachment)
+    observations_body = section_content(observations, "No se registraron observaciones adicionales en la información disponible.")
+    recommendation_body = section_content(recommendation, "No se informó una recomendación expresa para el comité.")
+    profile_body = section_content(profile_text, "No se informó un perfil detallado del cliente en la información disponible.")
+
+    identification = (
+        f"El presente acta documenta el análisis crediticio de {client_name} con un enfoque detallado y verificable para revisión de auditoría. "
+        f"La operación fue presentada como {client_type or 'tipo de cliente no informado'}, dentro de la categoría de {analysis_type or 'análisis no informado'}. "
+        f"Esta identificación permite precisar el contexto jurídico, económico y financiero del caso y delimitar las variables relevantes para la decisión.\n\n"
+        f"- Cliente: {client_name}\n"
+        f"- Tipo de cliente: {client_type or 'No informado'}\n"
+        f"- Tipo de análisis: {analysis_type or 'No informado'}\n"
+        f"- Línea de crédito: {linea_credito or 'No informada'}\n"
+        f"- MONTO solicitado: ${amount_value:,.2f}\n"
+        f"- PROPONENTE: {proponente or 'No informado'}\n"
+        f"- Grupo económico: {grupo_economico or 'No informado'}\n"
+        f"- Nivel de riesgo: {risk_level or 'No informado'}\n\n"
+        "Cada uno de estos elementos debe leerse de manera conjunta: la línea define el producto y su finalidad, el monto cuantifica la exposición propuesta, "
+        "el proponente sustenta el origen de la solicitud y el nivel de riesgo orienta la severidad del análisis. No deben extraerse conclusiones aisladas sin "
+        "considerar la capacidad de pago, las garantías, las condiciones y la evidencia documental disponible."
+    )
+
+    return f"""
 COMISIÓN DE CRÉDITO – COMITÉ EJECUTIVO
 
-PARA: {client_name}
-CLIENTE: {client_name}
-TIPO DE CLIENTE: {client_type}
-TIPO DE ANÁLISIS: {analysis_type}
-LÍNEA DE CRÉDITO: {linea_credito or 'No informado'}
-MONTO: ${amount:,.2f}
-PROPONENTE: {proponente or 'No informado'}
-NIVEL DE RIESGO: {risk_level}
+ACTA DE ANÁLISIS Y RESOLUCIÓN DE LA OPERACIÓN
 
-GRUPO ECONÓMICO / CLIENTE
-{grupo_economico or client_name}
+IDENTIFICACIÓN DEL CLIENTE Y NATURALEZA DE LA PRESENTACIÓN
 
-RESUMEN EJECUTIVO
-{analysis_template['resumen']}
+{identification}
 
 PERFIL DEL CLIENTE
+
 {client_template['perfil']}
 
-ANÁLISIS FINANCIERO
-{add_attachment(normalize_block(analisis_financiero, observations), analisis_financiero_attachment, 'ADJUNTO')}
+{profile_body}
+
+ANÁLISIS FINANCIERO Y CAPACIDAD DE PAGO
+
+{analysis_template['resumen']}
+
+{financial_body}
+
+NIVEL DE RIESGO
+
+El nivel de riesgo registrado para la operación es {risk_level or 'no informado'}. {client_template['riesgo']}
+
+El riesgo debe interpretarse como una variable integral que considera indicadores financieros, comportamiento histórico, estabilidad de ingresos, concentración, calidad de garantías y factores externos. Esta calificación no reemplaza la verificación documental ni el seguimiento continuo.
+
+GARANTÍAS Y MITIGANTES
+
+{guarantees_body}
+
+CONDICIONES PROPUESTAS
+
+{conditions_body}
 
 OBSERVACIONES
-{observations}
 
-GARANTÍAS
-{add_attachment(normalize_block(garantias, 'Garantías no especificadas en la información base.'), garantias_attachment, 'ADJUNTO')}
+{observations_body}
 
-CONDICIONES
-{add_attachment(normalize_block(condiciones, 'Se mantienen condiciones generales de la operación.'), condiciones_attachment, 'ADJUNTO')}
+RECOMENDACIÓN Y FUNDAMENTO
 
-RIESGOS
-- Riesgo de crédito asociado a la variabilidad del flujo del cliente.
-- Nivel de riesgo identificado: {risk_level}.
-- Se requiere seguimiento de la operación y de su capacidad de pago.
+{recommendation_body}
 
-RECOMENDACIÓN
-{recommendation}
+La recomendación debe entenderse como resultado de la evaluación conjunta de toda la información disponible, verificando que monto, línea, riesgo, garantías y condiciones sean compatibles con la capacidad real de pago. {analysis_template['recomendacion']}
+
+ANÁLISIS GRÁFICO E HISTÓRICO
+
+- Datos cuantitativos del caso: monto solicitado ${amount_value:,.2f}; anexos registrados (financiero: {"sí" if analisis_financiero_attachment else "no"}, garantías: {"sí" if garantias_attachment else "no"}, condiciones: {"sí" if condiciones_attachment else "no"}).
+
+Esta sección resume los datos cuantitativos disponibles en el expediente. Los gráficos de tendencia o históricos detallados se incluyen en el documento Word generado cuando existen series o valores numéricos extraíbles de las fuentes del acta; en ausencia de series temporales explícitas, se presentan los valores e indicadores cuantitativos disponibles sin omitir información. Cualquier dato no disponible se señala como limitación para auditoría.
 
 CONCLUSIÓN
-{analysis_template['recomendacion']}
+
+En conclusión, la decisión debe sustentarse en la evidencia incorporada, la coherencia del análisis narrativo y gráfico, y la resolución de los puntos pendientes antes del desembolso. No se deberán inferir hechos, montos, garantías u obligaciones no acreditados en la documentación revisada.
 """.strip()
-    return acta
 
 
 def frontend_file(asset_path=None):

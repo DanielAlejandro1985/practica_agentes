@@ -22,7 +22,7 @@ class TestActaGenerator(unittest.TestCase):
         )
 
         self.assertIn("COMISIÓN DE CRÉDITO – COMITÉ EJECUTIVO", acta)
-        self.assertIn("LÍNEA DE CRÉDITO", acta)
+        self.assertIn("Línea de crédito", acta)
         self.assertIn("MONTO", acta)
         self.assertIn("PROPONENTE", acta)
         self.assertIn("ANÁLISIS FINANCIERO", acta)
@@ -46,6 +46,34 @@ class TestActaGenerator(unittest.TestCase):
         )
 
         self.assertIn("balance.jpg", acta)
+
+    def test_generate_acta_uses_exhaustive_narrative_sections(self):
+        acta = generate_acta(
+            client_name="Ana López",
+            client_type="pyme",
+            analysis_type="crédito ordinario",
+            amount=120000,
+            risk_level="medio",
+            recommendation="Aprobar con seguimiento mensual",
+            observations="El flujo de caja requiere conciliación.",
+            proponente="Maria Paredes",
+            linea_credito="Crédito productivo",
+            grupo_economico="Grupo de servicios",
+            analisis_financiero="- Ingresos recurrentes\n- Flujo operativo cubre la cuota",
+            garantias="Hipoteca de primer grado.",
+            condiciones="Plazo de 36 meses.",
+            profile="- Antigüedad: 10 años\n- Actividad: servicios",
+        )
+
+        self.assertIn("IDENTIFICACIÓN DEL CLIENTE", acta)
+        self.assertIn("PERFIL DEL CLIENTE", acta)
+        self.assertIn("ANÁLISIS FINANCIERO Y CAPACIDAD DE PAGO", acta)
+        self.assertIn("RECOMENDACIÓN Y FUNDAMENTO", acta)
+        self.assertIn("ANÁLISIS GRÁFICO E HISTÓRICO", acta)
+        self.assertIn("Ingresos recurrentes", acta)
+        self.assertIn("- Ingresos recurrentes", acta)
+        self.assertIn("- Antigüedad: 10 años", acta)
+        self.assertIn("Análisis y contexto", acta)
 
 
 if __name__ == "__main__":
