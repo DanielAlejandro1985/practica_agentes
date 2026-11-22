@@ -73,7 +73,9 @@ class TestActaGenerator(unittest.TestCase):
         self.assertIn("Ingresos recurrentes", acta)
         self.assertIn("- Ingresos recurrentes", acta)
         self.assertIn("- Antigüedad: 10 años", acta)
-        self.assertIn("Análisis y contexto", acta)
+        self.assertIn("Ana López", acta)
+        self.assertIn("120,000.00", acta)
+        self.assertIn("capacidad de pago", acta.casefold())
 
 
 if __name__ == "__main__":

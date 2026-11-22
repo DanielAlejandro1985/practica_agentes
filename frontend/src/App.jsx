@@ -37,6 +37,7 @@ import {
   chartToPng,
   collectValidationIssues,
   formatCurrency,
+  isMeaningfulText,
   normalizeText,
 } from './actaRichContent.js'
 import './App.css'
@@ -522,14 +523,28 @@ function App() {
       new Paragraph({ children: [new PageBreak()] }),
 
       new Paragraph({ text: 'Identificación del cliente y naturaleza de la presentación', heading: HeadingLevel.HEADING_1 }),
-      justifiedParagraph('El presente acta documenta de manera detallada el análisis crediticio del caso, consolidando los datos, la evaluación realizada y las conclusiones sustentadas en la evidencia disponible al momento de su emisión.'),
+      justifiedParagraph(`Se presenta el análisis crediticio de ${clientName} con base en la información registrada y los soportes incorporados al expediente, a fin de sustentar la evaluación del caso y la decisión correspondiente.`),
       identificationTable,
       new Paragraph({ text: '', spacing: { after: 120 } }),
 
-      new Paragraph({ text: 'Alcance, metodología y criterios de análisis', heading: HeadingLevel.HEADING_1 }),
-      justifiedParagraph('Alcance: el análisis se circunscribe a la información consignada en el formulario, la narrativa de las secciones y los anexos incorporados al expediente. Los elementos no informados, no verificables o pendientes se señalan expresamente como limitaciones, sin inferir hechos no acreditados.'),
-      justifiedParagraph('Metodología y criterios: la evaluación se desarrolla de forma integral considerando dimensiones cualitativas y cuantitativas: perfil y contexto del solicitante, situación financiera y capacidad de pago, nivel de riesgo, garantías y mitigantes, estructura y condiciones de la operación, observaciones/hallazgos y recomendación. Cada conclusión debe ser consistente con la evidencia disponible y trazable a su fuente.'),
-      justifiedParagraph('Principios de rigor y trazabilidad: se exige coherencia entre monto/exposición, capacidad de repago, mitigantes y condiciones; identificación de supuestos y limitaciones; y definición de pendientes, responsables o condiciones cuando la información sea insuficiente o la decisión lo requiera.'),
+      new Paragraph({ text: 'Alcance y base de evidencia del análisis', heading: HeadingLevel.HEADING_1 }),
+      ...(() => {
+        const amountText = formatCurrency(data.amount) || 'un monto no informado'
+        const riskText = metricLabel(data.risk)
+        const sectionKeys = ['profile', 'financial', 'guarantees', 'conditions', 'observations', 'recommendation']
+        const informed = sectionKeys.filter((key) => isMeaningfulText(data[key])).length
+        const attachedCount = attachmentEntries.filter((entry) => entry?.name || entry?.blob).length
+        const missing = sectionKeys
+          .filter((key) => !isMeaningfulText(data[key]))
+          .map((key) => SECTION_DEFINITIONS.find((s) => s.key === key)?.label || key)
+        return [
+          justifiedParagraph(`El análisis se realiza sobre ${clientName}, para una exposición solicitada de ${amountText} y un nivel de riesgo registrado de ${riskText}, con base en la información documentada en el expediente: ${informed} de ${sectionKeys.length} secciones cuentan con información sustantiva y se registran ${attachedCount} soporte(s) anexo(s) incorporado(s).`),
+          justifiedParagraph('Las conclusiones sobre la capacidad de pago, el riesgo y la viabilidad de la operación se sustentan únicamente en los datos, cifras y evidencias disponibles; los vacíos de información limitan la certidumbre del dictamen y se reflejan en el análisis de cada componente del caso.'),
+          justifiedParagraph(missing.length
+            ? `La evaluación presenta limitaciones por falta de información sustantiva en: ${missing.join(', ')}; estos componentes deben completarse y respaldarse con evidencia verificable para fortalecer el análisis del sujeto y de sus números.`
+            : 'El expediente cuenta con información registrada en los componentes principales; aun así, las cifras y afirmaciones relevantes deben conciliarse con los soportes para confirmar su consistencia y vigencia.'),
+        ]
+      })(),
     ]
 
     for (const section of SECTION_DEFINITIONS) {
@@ -539,13 +554,26 @@ function App() {
     }
 
     children.push(new Paragraph({ text: 'Evaluación integral del riesgo y capacidad de pago', heading: HeadingLevel.HEADING_1 }))
-    const riskNarrative = [
-      `Nivel de riesgo registrado: ${metricLabel(data.risk)}. La calificación debe interpretarse de manera integral y no aislada.`,
-      `Capacidad de pago y exposición: se evalúa en función de la información financiera disponible frente al monto solicitado (${formatCurrency(data.amount) || 'no informado'}) y la estructura propuesta; la ausencia de información suficiente limita la conclusividad del análisis.`,
-      `Mitigantes y estructura: las garantías, condiciones, controles y covenants (cuando existen) deben valorarse por su cobertura, ejecutabilidad y alineación con la fuente primaria de repago.`,
-      `Hallazgos y coherencia: las observaciones y la recomendación deben ser consistentes con el perfil, el análisis financiero, el riesgo y los mitigantes documentados.`,
-    ]
-    riskNarrative.forEach((text) => children.push(justifiedParagraph(text)))
+    {
+      const amountText = formatCurrency(data.amount) || 'un monto no informado'
+      const riskText = metricLabel(data.risk)
+      const hasFinancial = isMeaningfulText(data.financial)
+      const hasGuarantees = isMeaningfulText(data.guarantees)
+      const hasConditions = isMeaningfulText(data.conditions)
+      const rec = normalizeText(data.recommendation)
+      const recPositive = /\b(se recomienda|aprobar|favorable|procedente|otorgar|conceder|autorizar)\b/i.test(rec)
+      const recNegative = /\b(no se recomienda|rechaz|desfavor|no aprobar|improceden|no procedente)\b/i.test(rec)
+      const highRisk = /\b(alto|cr[ií]tico|elevado)\b/i.test(normalizeText(data.risk))
+      const financialPara = hasFinancial
+        ? `La capacidad de pago de ${clientName} frente a la exposición solicitada de ${amountText} debe sustentarse en los ingresos, flujos, obligaciones e indicadores consignados en el análisis financiero; la viabilidad de la operación depende de que dichas cifras evidencien holgura suficiente y estable para atender la deuda.`
+        : `No es posible determinar con sustento la capacidad de pago de ${clientName} frente a ${amountText}, al no contarse con información financiera verificable (ingresos, flujos, obligaciones e indicadores), lo que constituye una limitación crítica para evaluar la viabilidad de repago.`
+      const mitigantsPara = `En cuanto a la estructura de respaldo y términos, ${hasGuarantees ? 'se registran garantías o mitigantes cuya cobertura y ejecutabilidad deben contrastarse con la exposición' : 'no se identifican garantías o mitigantes documentados que reduzcan la severidad de la pérdida'} y ${hasConditions ? 'se han propuesto condiciones que deben ser coherentes con la capacidad de pago y el riesgo' : 'no se han definido condiciones suficientes para encuadrar la operación'}; el riesgo registrado (${riskText}) ${highRisk ? 'exige mitigantes, controles y condiciones proporcionales y verificables' : 'debe ponderarse junto con la solidez del flujo y de los respaldos'}.`
+      let coherencePara = 'La postura crediticia debe resultar coherente con la evidencia disponible sobre perfil, capacidad de pago, mitigantes y términos de la operación.'
+      if (recPositive && !recNegative && !hasFinancial) coherencePara = 'La postura de recomendación registrada resulta inconsistente o insuficientemente sustentada mientras no se acredite la capacidad de pago del sujeto frente al monto solicitado.'
+      else if (recPositive && !recNegative && highRisk && !hasGuarantees && !hasConditions) coherencePara = 'Una postura favorable, ante un nivel de riesgo elevado y sin mitigantes ni condiciones claramente definidos, requiere sustento adicional y la explicitación de controles para ser consistente con el análisis del caso.'
+      else if (rec) coherencePara = 'La recomendación consignada debe interpretarse en función de la coherencia entre los números del caso, la capacidad de pago demostrada, los mitigantes disponibles y las condiciones exigibles.'
+      ;[financialPara, mitigantsPara, coherencePara].forEach((text) => children.push(justifiedParagraph(text)))
+    }
 
     const availableAttachments = attachmentEntries.filter((entry) => entry.name)
     children.push(new Paragraph({ text: 'Trazabilidad y soportes del expediente', heading: HeadingLevel.HEADING_1 }))
@@ -684,7 +712,7 @@ function App() {
   }
   const exportActa = async () => {
     if (!form.clientName.trim()) {
-      setExportError('Ingresa el nombre del cliente para generar el Word.')
+      setExportError('Ingresa el nombre del cliente para generar el acta.')
       return
     }
 
@@ -694,7 +722,7 @@ function App() {
       const { blob, filename } = await buildWord()
       downloadBlob(blob, filename)
     } catch (error) {
-      setExportError(error instanceof Error ? error.message : 'No se pudo generar el Word.')
+      setExportError(error instanceof Error ? error.message : 'No se pudo generar el acta.')
       console.error(error)
     } finally {
       setExporting(false)
@@ -1179,7 +1207,7 @@ function App() {
                 {saving ? 'Guardando…' : selectedActaId ? 'Guardar cambios' : 'Guardar acta'}
               </button>
               <button type="button" className="export-button" onClick={exportActa} disabled={exporting || saving}>
-                {exporting ? 'Generando…' : 'Descargar Word'}
+                {exporting ? 'Generando acta…' : 'Generar acta'}
               </button>
             </div>
           </div>
@@ -1238,10 +1266,25 @@ function App() {
             </section>
 
             <section className="summary-block">
-              <h3>Alcance, metodología y criterios de análisis</h3>
-              <p>Alcance: el análisis se circunscribe a la información consignada en el formulario, la narrativa de las secciones y los anexos incorporados al expediente. Los elementos no informados, no verificables o pendientes se señalan expresamente como limitaciones, sin inferir hechos no acreditados.</p>
-              <p>Metodología y criterios: la evaluación considera de forma integral el perfil y contexto del solicitante, la situación financiera y capacidad de pago, el nivel de riesgo, las garantías y mitigantes, la estructura/condiciones de la operación, las observaciones y la recomendación. Cada conclusión debe ser coherente con la evidencia disponible y trazable a su fuente.</p>
-              <p>Principios de rigor: se exige consistencia entre monto/exposición, capacidad de repago, mitigantes y condiciones; identificación de supuestos y limitaciones; y definición de pendientes o condiciones cuando corresponda.</p>
+              <h3>Alcance y base de evidencia del análisis</h3>
+              {(() => {
+                const client = formatNarrativeValue(form.clientName, 'el sujeto de crédito evaluado')
+                const amountText = formatCurrency(form.amount) || 'un monto no informado'
+                const riskText = formatNarrativeValue(form.risk, 'no informado')
+                const sectionKeys = ['profile', 'financial', 'guarantees', 'conditions', 'observations', 'recommendation']
+                const informed = sectionKeys.filter((key) => isMeaningfulText(form[key])).length
+                const attachedCount = attachmentSections.filter(({ key }) => attachedFiles[key]?.name || (!removedAttachments.includes(key) && savedAttachments[key]?.filename)).length
+                const missing = sectionKeys.filter((key) => !isMeaningfulText(form[key])).map((key) => SECTION_DEFINITIONS.find((s) => s.key === key)?.label || key)
+                return (
+                  <>
+                    <p>El análisis se realiza sobre {client}, para una exposición solicitada de {amountText} y un nivel de riesgo registrado de {riskText}, con base en la información documentada en el expediente: {informed} de {sectionKeys.length} secciones cuentan con información sustantiva y se registran {attachedCount} soporte(s) anexo(s) incorporado(s).</p>
+                    <p>Las conclusiones sobre la capacidad de pago, el riesgo y la viabilidad de la operación se sustentan únicamente en los datos, cifras y evidencias disponibles; los vacíos de información limitan la certidumbre del dictamen y se reflejan en el análisis de cada componente del caso.</p>
+                    {missing.length
+                      ? <p>La evaluación presenta limitaciones por falta de información sustantiva en: {missing.join(', ')}; estos componentes deben completarse y respaldarse con evidencia verificable para fortalecer el análisis del sujeto y de sus números.</p>
+                      : <p>El expediente cuenta con información registrada en los componentes principales; aun así, las cifras y afirmaciones relevantes deben conciliarse con los soportes para confirmar su consistencia y vigencia.</p>}
+                  </>
+                )
+              })()}
             </section>
 
             {SECTION_DEFINITIONS.map((section) => (
@@ -1253,12 +1296,33 @@ function App() {
 
             <section className="summary-block">
               <h3>Evaluación integral del riesgo y capacidad de pago</h3>
-              <ul>
-                <li><strong>Nivel de riesgo registrado:</strong> {formatNarrativeValue(form.risk, 'No informado')}. La calificación debe interpretarse de manera integral y no aislada.</li>
-                <li><strong>Capacidad de pago y exposición:</strong> se evalúa frente al monto solicitado ({formatCurrency(form.amount) || 'no informado'}) y la estructura propuesta; la información insuficiente limita la conclusividad del análisis.</li>
-                <li><strong>Mitigantes y estructura:</strong> garantías, condiciones y controles deben valorarse por cobertura, ejecutabilidad y alineación con la fuente primaria de repago.</li>
-                <li><strong>Coherencia:</strong> observaciones y recomendación deben ser consistentes con perfil, análisis financiero, riesgo y mitigantes documentados.</li>
-              </ul>
+              {(() => {
+                const client = formatNarrativeValue(form.clientName, 'el sujeto de crédito evaluado')
+                const amountText = formatCurrency(form.amount) || 'un monto no informado'
+                const riskText = formatNarrativeValue(form.risk, 'no informado')
+                const hasFinancial = isMeaningfulText(form.financial)
+                const hasGuarantees = isMeaningfulText(form.guarantees)
+                const hasConditions = isMeaningfulText(form.conditions)
+                const rec = normalizeText(form.recommendation)
+                const recPositive = /\b(se recomienda|aprobar|favorable|procedente|otorgar|conceder|autorizar)\b/i.test(rec)
+                const recNegative = /\b(no se recomienda|rechaz|desfavor|no aprobar|improceden|no procedente)\b/i.test(rec)
+                const highRisk = /\b(alto|cr[ií]tico|elevado)\b/i.test(normalizeText(form.risk))
+                const financialPara = hasFinancial
+                  ? `La capacidad de pago de ${client} frente a la exposición solicitada de ${amountText} debe sustentarse en los ingresos, flujos, obligaciones e indicadores consignados en el análisis financiero; la viabilidad de la operación depende de que dichas cifras evidencien holgura suficiente y estable para atender la deuda.`
+                  : `No es posible determinar con sustento la capacidad de pago de ${client} frente a ${amountText}, al no contarse con información financiera verificable (ingresos, flujos, obligaciones e indicadores), lo que constituye una limitación crítica para evaluar la viabilidad de repago.`
+                const mitigantsPara = `En cuanto a la estructura de respaldo y términos, ${hasGuarantees ? 'se registran garantías o mitigantes cuya cobertura y ejecutabilidad deben contrastarse con la exposición' : 'no se identifican garantías o mitigantes documentados que reduzcan la severidad de la pérdida'} y ${hasConditions ? 'se han propuesto condiciones que deben ser coherentes con la capacidad de pago y el riesgo' : 'no se han definido condiciones suficientes para encuadrar la operación'}; el riesgo registrado (${riskText}) ${highRisk ? 'exige mitigantes, controles y condiciones proporcionales y verificables' : 'debe ponderarse junto con la solidez del flujo y de los respaldos'}.`
+                let coherencePara = 'La postura crediticia debe resultar coherente con la evidencia disponible sobre perfil, capacidad de pago, mitigantes y términos de la operación.'
+                if (recPositive && !recNegative && !hasFinancial) coherencePara = 'La postura de recomendación registrada resulta inconsistente o insuficientemente sustentada mientras no se acredite la capacidad de pago del sujeto frente al monto solicitado.'
+                else if (recPositive && !recNegative && highRisk && !hasGuarantees && !hasConditions) coherencePara = 'Una postura favorable, ante un nivel de riesgo elevado y sin mitigantes ni condiciones claramente definidos, requiere sustento adicional y la explicitación de controles para ser consistente con el análisis del caso.'
+                else if (rec) coherencePara = 'La recomendación consignada debe interpretarse en función de la coherencia entre los números del caso, la capacidad de pago demostrada, los mitigantes disponibles y las condiciones exigibles.'
+                return (
+                  <>
+                    <p>{financialPara}</p>
+                    <p>{mitigantsPara}</p>
+                    <p>{coherencePara}</p>
+                  </>
+                )
+              })()}
             </section>
 
             {(() => {

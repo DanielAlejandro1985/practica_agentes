@@ -53,7 +53,7 @@ function caseDataFromContext(context = {}) {
   return context && typeof context === 'object' ? context : {}
 }
 
-function isMeaningfulText(value) {
+export function isMeaningfulText(value) {
   const text = normalizeText(value)
   if (!text) return false
   const lower = text.toLowerCase()
@@ -83,46 +83,6 @@ function parseAmount(value) {
   return Number.isFinite(amount) ? amount : null
 }
 
-function buildSectionFocus(key, caseData = {}) {
-  const amount = parseAmount(caseData.amount)
-  const exposure = Number.isFinite(amount) ? ` para la exposición solicitada de ${formatCurrency(amount)}` : ''
-  switch (key) {
-    case 'profile':
-      return `Alcance del análisis: caracterización del solicitante, actividad, trayectoria, estructura y factores cualitativos relevantes para la operación${exposure}.`
-    case 'financial':
-      return `Alcance del análisis: evaluación de la situación financiera, flujos, obligaciones e indicadores disponibles para sustentar la capacidad de pago frente a la solicitud${exposure}.`
-    case 'guarantees':
-      return 'Alcance del análisis: identificación y evaluación de garantías y mitigantes, su naturaleza, cobertura, ejecutabilidad y aporte a la mitigación del riesgo.'
-    case 'conditions':
-      return 'Alcance del análisis: revisión de la estructura y condiciones propuestas (monto, plazo, tasa, forma de pago, destino, covenants/controles) y su coherencia con el caso.'
-    case 'recommendation':
-      return 'Alcance del análisis: postura crediticia documentada, fundamentos, consistencia con el análisis integral y determinación de condiciones o reservas aplicables.'
-    case 'observations':
-      return 'Alcance del análisis: hallazgos, alertas, limitaciones, inconsistencias y aspectos que requieren gestión, validación o seguimiento.'
-    default:
-      return 'Alcance del análisis: información relevante registrada para el caso.'
-  }
-}
-
-function buildPendingNote(key) {
-  switch (key) {
-    case 'profile':
-      return 'Limitaciones y pendientes: no se dispone de información suficiente del perfil. Acción requerida: incorporar actividad, antigüedad, estructura, experiencia y factores cualitativos relevantes, con fuente verificable.'
-    case 'financial':
-      return 'Limitaciones y pendientes: no se dispone de información financiera/capacidad de pago suficiente. Acción requerida: incorporar estados financieros, flujos, obligaciones e indicadores, sustentados documentalmente.'
-    case 'guarantees':
-      return 'Limitaciones y pendientes: no se dispone de detalle de garantías/mitigantes. Acción requerida: documentar naturaleza, valor, cobertura, ejecutabilidad y condiciones, o dejar constancia expresa de su inexistencia.'
-    case 'conditions':
-      return 'Limitaciones y pendientes: no se dispone de condiciones de la operación suficientemente definidas. Acción requerida: precisar monto, plazo, tasa, forma de pago, destino y controles/covenants aplicables.'
-    case 'recommendation':
-      return 'Limitaciones y pendientes: no existe recomendación expresa. Acción requerida: documentar postura crediticia (aprobar, aprobar con condiciones o no aprobar) con fundamento y, si aplica, condiciones previas/permanentes.'
-    case 'observations':
-      return 'No informado: no se registraron observaciones adicionales. Acción sugerida: confirmar explícitamente la ausencia de hallazgos relevantes o registrar los identificados.'
-    default:
-      return 'Limitaciones y pendientes: información no disponible. Acción requerida: completar y sustentar la sección con evidencia trazable.'
-  }
-}
-
 function detectSectionSignals(text) {
   const value = compact(text)
   const lower = value.toLowerCase()
@@ -130,12 +90,12 @@ function detectSectionSignals(text) {
     hasPending: /\b(pendiente|por confirmar|por definir|sujeto a|a validar|no disponible|faltante|en proceso)\b/i.test(lower),
     hasNoInfo: /\b(no informado|sin información|sin informacion|no se informó|no se informo|n\/a|no aplica)\b/i.test(lower),
     hasConditions: /\b(condici[oó]n|sujeto a|previo a|siempre que|covenant|mitigante|seguimiento|control|garant|l[ií]mite|restric|reserva)\b/i.test(lower),
-    hasNegative: /\b(no se recomienda|rechaz|desfavor|no aprobar|improceden|no procedente|no viable|no recomendable|deterioro|p[ée]rdida|incumplim)\b/i.test(lower),
-    hasPositive: /\b(se recomienda aprobar|aprobar|favorable|procedente|otorgar|conceder|autorizar|fortaleza|solidez|adecuad)\b/i.test(lower),
+    hasNegative: /\b(no se recomienda|rechaz|desfavor|no aprobar|improceden|no procedente|no viable|no recomendable|deterioro|p[ée]rdida|incumplim|il[ií]quidez|deficiente|alto riesgo)\b/i.test(lower),
+    hasPositive: /\b(se recomienda aprobar|aprobar|favorable|procedente|otorgar|conceder|autorizar|fortaleza|solidez|adecuad|suficiente|estable|respaldo)\b/i.test(lower),
     hasApproval: /\baprobar|aproba(?:ci[oó]n)|autorizar|otorgar|conceder\b/i.test(lower),
-    hasMetrics: /(\b(ventas|ingresos|ebitda|margen|utilidad|liquidez|apalancamiento|deuda|dscr|cobertura|capital de trabajo|flujo|balance|patrimonio|ratio)\b)|(\d[\d.,]*\s*%)/i.test(lower),
+    hasMetrics: /(\b(ventas|ingresos|ebitda|margen|utilidad|liquidez|apalancamiento|deuda|dscr|cobertura|capital de trabajo|flujo|balance|patrimonio|ratio|cuota|tasa|plazo|monto)\b)|(\d[\d.,]*\s*%)/i.test(lower),
     hasStrength: /\b(fortaleza|s[oó]lido|estable|adecuad|suficiente|positivo|trayectoria|experiencia|respaldo)\b/i.test(lower),
-    hasWeakness: /\b(debilidad|riesgo|insuficiente|vol[aá]til|deterioro|concentraci[oó]n|dependenc|presi[oó]n|incumplim|alto)\b/i.test(lower),
+    hasWeakness: /\b(debilidad|riesgo|insuficiente|vol[aá]til|deterioro|concentraci[oó]n|dependenc|presi[oó]n|incumplim|alto|il[ií]quidez)\b/i.test(lower),
   }
 }
 
@@ -170,154 +130,149 @@ function recommendationContradictions(caseData = {}) {
   const recPos = /\b(se recomienda|aprobar|favorable|procedente|otorgar|conceder|autorizar)\b/i.test(rec)
   const recCond = /\b(condici|sujeto a|previo a|siempre que|covenant|mitigante|seguimiento|garant)\b/i.test(rec) || /\b(condici|sujeto a|previo a|siempre que|covenant|mitigante|seguimiento|garant)\b/i.test(cond)
   if (recPos && !recNeg && !recCond && /\b(insuficiente|deterioro|p[ée]rdida|incumplim|il[ií]quidez|alto riesgo|deficiente|no sostenible)\b/i.test(`${financial}\n${observations}`)) {
-    issues.push('La recomendación favorable coexiste con señales de debilidad o riesgo relevante en el análisis/observaciones; requiere sustento adicional o condiciones explícitas.')
+    issues.push('La recomendación favorable debe sustentarse frente a señales de debilidad o riesgo observadas en la información financiera y las observaciones del caso.')
   }
   if (recPos && !recNeg && !recCond && /\b(no informado|pendiente|por confirmar|sin información|sin informacion)\b/i.test(`${financial}\n${guarantees}`)) {
-    issues.push('La recomendación favorable no explicita mitigantes o condiciones frente a información financiera/garantías pendiente o no informada.')
+    issues.push('La recomendación favorable requiere sustento adicional o condiciones explícitas mientras existan vacíos en la información financiera o en las garantías.')
   }
   if (recNeg && recPos) {
-    issues.push('La recomendación contiene señales simultáneas de aprobación y no aprobación; debe precisarse la postura final.')
+    issues.push('La postura consignada combina señales de aprobación y de no aprobación, por lo que debe precisarse la decisión final para el sujeto de crédito.')
   }
   return issues
 }
 
-function sectionCriteria(key) {
-  switch (key) {
-    case 'profile':
-      return 'Criterios de evaluación: identificación y naturaleza del solicitante, actividad y antigüedad, experiencia y capacidad operativa, estructura/relaciones relevantes, consistencia cualitativa con la operación solicitada.'
-    case 'financial':
-      return 'Criterios de evaluación: generación y estabilidad de ingresos/flujo, estructura de obligaciones y endeudamiento, liquidez y solvencia, capacidad de pago frente a la cuota/exposición, consistencia y suficiencia de la información financiera.'
-    case 'guarantees':
-      return 'Criterios de evaluación: tipo y naturaleza de garantías/mitigantes, cobertura frente a la exposición, calidad y ejecutabilidad, condiciones de constitución/actualización y rol como fuente secundaria de repago.'
-    case 'conditions':
-      return 'Criterios de evaluación: adecuación de monto, plazo, tasa, forma de pago y destino; alineación con capacidad de pago y finalidad; existencia de covenants, controles, condiciones previas y compromisos de seguimiento.'
-    case 'recommendation':
-      return 'Criterios de evaluación: coherencia entre hallazgos del análisis, postura propuesta (aprobar/aprobar con condiciones/no aprobar), fundamentación, proporcionalidad de condiciones y viabilidad de cumplimiento.'
-    case 'observations':
-      return 'Criterios de evaluación: materialidad de hallazgos y alertas, impacto en riesgo y capacidad de pago, limitaciones de información, acciones correctivas y necesidades de seguimiento o validación.'
-    default:
-      return 'Criterios de evaluación: relevancia, consistencia, soporte y trazabilidad de la información registrada.'
-  }
-}
-
-function sectionImplication(key, caseData = {}, signals = {}) {
+function formatSubject(caseData = {}) {
+  const client = normalizeText(caseData.clientName) || 'el sujeto de crédito evaluado'
+  const clientType = normalizeText(caseData.clientType)
   const amount = parseAmount(caseData.amount)
-  const amountText = Number.isFinite(amount) ? ` (${formatCurrency(amount)})` : ''
+  const amountText = Number.isFinite(amount) ? formatCurrency(amount) : 'un monto no informado'
+  const risk = normalizeText(caseData.risk) || 'no informado'
+  const line = normalizeText(caseData.line)
+  const typePart = clientType ? `, en calidad de ${clientType},` : ''
+  const linePart = line ? `, para la línea ${line}` : ''
+  return { client, typePart, amountText, risk, linePart }
+}
+
+function subjectContextSentence(caseData = {}, key = '') {
+  const { client, typePart, amountText, risk, linePart } = formatSubject(caseData)
   switch (key) {
     case 'profile':
-      return `Implicaciones para el riesgo: los factores cualitativos del perfil inciden en la previsibilidad del comportamiento crediticio y en la sostenibilidad de la relación; su debilidad o falta de sustento incrementa la incertidumbre de la operación${amountText}.`
+      return `En relación con ${client}${typePart}, que solicita ${amountText}${linePart} con un nivel de riesgo ${risk}, el análisis de su perfil y antecedentes cualitativos arroja lo siguiente.`
     case 'financial':
-      return `Implicaciones para riesgo y capacidad de pago: la suficiencia, estabilidad y calidad del flujo/ingresos determinan la viabilidad de atender las obligaciones${amountText}; limitaciones o señales de presión financiera elevan la probabilidad de deterioro.`
+      return `Para ${client}, frente a una exposición solicitada de ${amountText}${linePart} y un nivel de riesgo ${risk}, el análisis de su situación financiera y capacidad de pago se sustenta en la siguiente información.`
     case 'guarantees':
-      return 'Implicaciones para el riesgo: las garantías y mitigantes reducen la severidad potencial de pérdida en la medida de su cobertura, calidad y ejecutabilidad, pero no sustituyen una capacidad de pago primaria adecuada.'
+      return `Respecto de ${client} y la exposición solicitada de ${amountText}${linePart}, el análisis de las garantías y mitigantes disponibles para respaldar la operación es el siguiente.`
     case 'conditions':
-      return 'Implicaciones para el riesgo: la estructura de términos y controles debe ser compatible con la capacidad de pago y la finalidad; condiciones inadecuadas o no verificables pueden incrementar el riesgo operativo y crediticio.'
+      return `Para la operación solicitada por ${client} por ${amountText}${linePart}, con riesgo ${risk}, el análisis de los términos y condiciones propuestos es el siguiente.`
     case 'recommendation':
-      return 'Implicaciones para la decisión: la postura propuesta debe ser consistente con la evidencia disponible y explicitar condiciones, reservas o seguimientos necesarios para una aprobación responsable.'
+      return `Considerando a ${client}, el monto solicitado de ${amountText}${linePart}, el riesgo ${risk} y la evidencia disponible, la recomendación crediticia y su fundamento son los siguientes.`
     case 'observations':
-      return 'Implicaciones para el riesgo y seguimiento: los hallazgos y limitaciones identificados pueden afectar la decisión o requerir acciones, controles y monitoreo con responsables y plazos definidos.'
+      return `Del análisis del caso de ${client} (monto ${amountText}, riesgo ${risk}${linePart ? `, ${linePart.replace(/^, /, '')}` : ''}) se desprenden los siguientes hallazgos y observaciones relevantes.`
     default:
-      return 'Implicaciones para el riesgo: la información de esta sección debe valorarse en función de su impacto sobre la operación y la capacidad de repago.'
+      return `Para ${client}, con una exposición solicitada de ${amountText} y riesgo ${risk}, el análisis de la información disponible es el siguiente.`
   }
 }
 
-function sectionSupportNote(key, signals = {}) {
-  if (signals.hasStrength || signals.hasPositive) {
-    return 'Elementos de soporte identificados en lo registrado: se observan aspectos favorables o de respaldo según la información consignada; su relevancia debe confirmarse frente a la evidencia documental y al conjunto del caso.'
-  }
-  if (signals.hasMetrics) {
-    return 'Elementos de soporte identificados en lo registrado: se consignan datos/cifras o referencias cuantitativas que sirven como base de análisis, sujetas a validación y conciliación con los soportes.'
-  }
-  return 'Elementos de soporte identificados en lo registrado: no se identifican fortalezas adicionales explícitas más allá de lo consignado; la valoración definitiva depende de la verificación de la evidencia disponible.'
-}
-
-function sectionConclusion(key, signals = {}) {
-  const pending = signals.hasPending || signals.hasNoInfo
+function sectionMissingAnalysis(key, caseData = {}) {
+  const { client, amountText, risk } = formatSubject(caseData)
   switch (key) {
     case 'profile':
-      return pending
-        ? 'Conclusión de la sección: el perfil presenta información con limitaciones; su valoración es preliminar y queda sujeta a la documentación y cierre de pendientes.'
-        : 'Conclusión de la sección: el perfil registrado aporta elementos cualitativos para el análisis, sujeto a verificación documental y consistencia con el resto del expediente.'
+      return `No se cuenta con información suficiente del perfil de ${client}, por lo que no es posible analizar con sustento su actividad, trayectoria, experiencia y factores cualitativos ni su consistencia con la operación de ${amountText}; esta carencia limita la valoración integral del sujeto de crédito.`
     case 'financial':
-      return pending
-        ? 'Conclusión de la sección: no es posible concluir de forma suficiente sobre la capacidad de pago sin completar y sustentar la información financiera pendiente.'
-        : 'Conclusión de la sección: la información financiera registrada permite un análisis en los términos expuestos, condicionado a la verificación de cifras, soportes y coherencia con la operación.'
+      return `No se dispone de información financiera verificable de ${client} (ingresos, flujos, obligaciones, márgenes o indicadores), por lo que no es posible determinar su capacidad de pago frente a la exposición solicitada de ${amountText} ni cuantificar la holgura o presión financiera; el análisis de viabilidad de repago queda sin sustento.`
     case 'guarantees':
-      return pending
-        ? 'Conclusión de la sección: la evaluación de mitigantes es incompleta mientras no se definan y sustenten las garantías o se confirme expresamente su inexistencia.'
-        : 'Conclusión de la sección: las garantías/mitigantes registrados constituyen soporte del caso en los términos descritos, sujeto a validación de cobertura y ejecutabilidad.'
+      return `No se registra información sobre garantías o mitigantes que respalden a ${client} frente a la exposición de ${amountText}, por lo que no es posible evaluar cobertura, calidad o ejecutabilidad de un respaldo secundario de repago ni su efecto en la severidad potencial de la pérdida.`
     case 'conditions':
-      return pending
-        ? 'Conclusión de la sección: las condiciones de la operación requieren definición o validación adicional para asegurar su alineación con la capacidad de pago y el riesgo.'
-        : 'Conclusión de la sección: las condiciones registradas son evaluables conforme a lo documentado, sujetas a confirmación de términos, controles y viabilidad de cumplimiento.'
+      return `No se encuentran definidos los términos de la operación de ${client} (plazo, tasa, forma de pago, destino o controles), lo que impide analizar su adecuación a una exposición de ${amountText} y al perfil de riesgo ${risk}, así como la factibilidad de cumplimiento.`
     case 'recommendation':
-      return pending
-        ? 'Conclusión de la sección: la recomendación no se encuentra suficientemente definida o sustentada; debe precisarse antes de la deliberación final.'
-        : 'Conclusión de la sección: la recomendación registrada debe leerse como resultado del análisis integral y en coherencia con la evidencia, condiciones y limitaciones del expediente.'
+      return `No existe una recomendación crediticia expresa para ${client}; en ausencia de una postura fundada (aprobar, aprobar con condiciones o no aprobar) no es posible concluir la decisión sobre la exposición de ${amountText}.`
     case 'observations':
-      return pending
-        ? 'Conclusión de la sección: existen observaciones o limitaciones que requieren gestión/seguimiento; su cierre o tratamiento debe quedar documentado.'
-        : 'Conclusión de la sección: las observaciones registradas delimitan aspectos de atención para la decisión y, cuando corresponda, para el seguimiento posterior.'
+      return `No se registraron observaciones o hallazgos adicionales sobre ${client}; se recomienda confirmar expresamente la ausencia de alertas o dejar constancia de cualquier limitación identificada en la revisión del expediente.`
     default:
-      return 'Conclusión de la sección: análisis sujeto a la información y evidencia disponible.'
+      return `No se dispone de información suficiente para analizar este aspecto del caso de ${client}.`
   }
+}
+
+function sourceToProse(text) {
+  const blocks = splitContentBlocks(text)
+  if (!blocks.length) return compact(text)
+  const parts = []
+  for (const block of blocks) {
+    const items = parseBlockLines(block)
+    const bulletTexts = items.filter((item) => item.type === 'bullet').map((item) => compact(item.text)).filter(Boolean)
+    const paragraphTexts = items.filter((item) => item.type !== 'bullet').map((item) => compact(item.text)).filter(Boolean)
+    if (paragraphTexts.length) parts.push(paragraphTexts.join(' '))
+    if (bulletTexts.length) {
+      parts.push(bulletTexts.map((entry) => sentence(entry)).join(' '))
+    }
+  }
+  return parts.join(' ').replace(/\s+/g, ' ').trim() || compact(text)
+}
+
+function analyticalImplications(key, caseData = {}, signals = {}, text = '') {
+  const amount = parseAmount(caseData.amount)
+  const amountText = Number.isFinite(amount) ? formatCurrency(amount) : 'la exposición solicitada'
+  const parts = []
+  if (key === 'financial') {
+    if (signals.hasMetrics) parts.push(`Los datos y referencias numéricas consignados permiten contrastar la capacidad de generar flujo frente a ${amountText}, aunque su validez depende de la conciliación con los soportes y de la estabilidad de dichas cifras.`)
+    if (signals.hasWeakness || signals.hasNegative) parts.push('Las señales de presión, insuficiencia o deterioro observadas afectan la holgura para atender las obligaciones y elevan el riesgo de incumplimiento si no se mitigan.')
+    if (signals.hasStrength || signals.hasPositive) parts.push('Los elementos favorables registrados respaldan, en lo documentado, la capacidad de atender la operación, sujeto a la verificación de su sostenibilidad.')
+    if (!parts.length) parts.push(`De lo registrado debe inferirse, con soporte documental, si el flujo y la situación financiera del sujeto son suficientes y estables para cubrir ${amountText} y las obligaciones asociadas.`)
+  } else if (key === 'guarantees') {
+    if (signals.hasStrength || signals.hasPositive) parts.push('Los mitigantes descritos aportan un respaldo secundario que puede reducir la severidad de pérdida, siempre que su cobertura y ejecutabilidad resulten efectivas frente a la exposición.')
+    if (signals.hasWeakness || signals.hasNegative) parts.push('Las limitaciones en cobertura, calidad o ejecutabilidad de los respaldos reducen su eficacia como mitigante del riesgo de la operación.')
+    if (!parts.length) parts.push(`La solidez del respaldo debe medirse por su cobertura real frente a ${amountText}, su calidad y la factibilidad de ejecución, sin sustituir la capacidad de pago primaria.`)
+  } else if (key === 'conditions') {
+    if (signals.hasConditions) parts.push('Los términos, controles o condiciones identificados deben ser proporcionales al riesgo y compatibles con la capacidad de pago y la finalidad declarada de la operación.')
+    if (signals.hasWeakness || signals.hasNegative) parts.push('Las condiciones inadecuadas o no verificables pueden tensionar el cumplimiento y aumentar el riesgo operativo y crediticio.')
+    if (!parts.length) parts.push(`La estructura propuesta debe evaluarse por su coherencia con la capacidad de pago del sujeto, el nivel de riesgo y el monto de ${amountText}.`)
+  } else if (key === 'profile') {
+    if (signals.hasStrength || signals.hasPositive) parts.push('Los antecedentes y factores cualitativos favorables aportan previsibilidad y respaldo a la relación crediticia, en la medida en que sean verificables.')
+    if (signals.hasWeakness || signals.hasNegative) parts.push('Las debilidades o alertas cualitativas identificadas incrementan la incertidumbre sobre el comportamiento y la sostenibilidad de la operación.')
+    if (!parts.length) parts.push('La información del perfil debe leerse en función de su consistencia con la operación solicitada y de su respaldo en evidencia verificable.')
+  } else if (key === 'observations') {
+    if (signals.hasWeakness || signals.hasNegative) parts.push('Los hallazgos y alertas señalados tienen impacto potencial sobre el riesgo y la capacidad de pago, por lo que requieren atención, mitigación o seguimiento definido.')
+    if (signals.hasPending) parts.push('Los aspectos pendientes o no confirmados limitan la conclusividad del análisis hasta su validación documental.')
+    if (!parts.length) parts.push('Los elementos consignados deben considerarse en la decisión y, cuando corresponda, traducirse en acciones, responsables y plazos de seguimiento.')
+  } else if (key === 'recommendation') {
+    const contradictions = recommendationContradictions(caseData)
+    if (contradictions.length) parts.push(contradictions[0])
+    else parts.push('La postura expuesta debe guardar coherencia con la capacidad de pago, las garantías y mitigantes, las condiciones propuestas y el nivel de riesgo del caso.')
+  } else {
+    parts.push('La información disponible debe valorarse por su impacto concreto sobre la capacidad de repago, el riesgo asumido y la consistencia del caso.')
+  }
+  if (signals.hasPending || signals.hasNoInfo) {
+    parts.push('La existencia de datos pendientes o no informados limita la conclusividad del análisis y debe resolverse o condicionarse antes de la decisión definitiva, según corresponda.')
+  }
+  return parts.join(' ').replace(/\s+/g, ' ').trim()
 }
 
 export function buildNarrativeBlocks(key, label, value, context = {}) {
   const caseData = caseDataFromContext(context)
   const text = normalizeText(value)
-  const result = []
   const signals = detectSectionSignals(text)
 
-  result.push({ type: 'paragraph', text: buildSectionFocus(key, caseData) })
-
   if (!isMeaningfulText(text)) {
-    result.push({ type: 'paragraph', text: 'Información registrada: no se consignó información sustantiva en esta sección.' })
-    result.push({ type: 'paragraph', text: sectionCriteria(key) })
-    result.push({ type: 'paragraph', text: sectionImplication(key, caseData, signals) })
-    result.push({ type: 'paragraph', text: buildPendingNote(key) })
-    result.push({ type: 'paragraph', text: sectionConclusion(key, { hasPending: true, hasNoInfo: true }) })
-    return result
+    return [
+      {
+        type: 'paragraph',
+        text: `${subjectContextSentence(caseData, key)} ${sectionMissingAnalysis(key, caseData)}`.replace(/\s+/g, ' ').trim(),
+      },
+    ]
   }
 
-  const blocks = splitContentBlocks(text)
-  result.push({ type: 'paragraph', text: 'Información registrada (detalle consignado):' })
-  for (const block of blocks) {
-    for (const item of parseBlockLines(block)) {
-      if (item.text) result.push(item)
-    }
+  const detail = sourceToProse(text)
+  const implication = analyticalImplications(key, caseData, signals, text)
+  const paragraphs = [
+    {
+      type: 'paragraph',
+      text: `${subjectContextSentence(caseData, key)} ${detail}`.replace(/\s+/g, ' ').trim(),
+    },
+  ]
+  if (implication) {
+    paragraphs.push({ type: 'paragraph', text: implication })
   }
-
-  result.push({ type: 'paragraph', text: `Análisis técnico: ${sectionCriteria(key)}` })
-  if (key === 'recommendation') {
-    const contradictions = recommendationContradictions(caseData)
-    if (contradictions.length) {
-      result.push({ type: 'paragraph', text: `Coherencia y consistencia: ${contradictions[0]}` })
-    } else {
-      result.push({ type: 'paragraph', text: 'Coherencia y consistencia: la postura consignada debe contrastarse con los hallazgos financieros, las garantías/mitigantes, las condiciones y el nivel de riesgo documentado.' })
-    }
-  }
-  result.push({ type: 'paragraph', text: sectionImplication(key, caseData, signals) })
-  if (key !== 'observations') {
-    result.push({ type: 'paragraph', text: sectionSupportNote(key, signals) })
-  }
-
-  const limitations = []
-  if (signals.hasPending) limitations.push('Se identifican elementos pendientes o sujetos a confirmación dentro de lo registrado.')
-  if (signals.hasNoInfo) limitations.push('Se registran menciones a información no disponible/no informada.')
-  if (signals.hasWeakness || signals.hasNegative) limitations.push('Se observan señales de riesgo, debilidad o restricciones que requieren valoración y, de corresponder, mitigación o seguimiento.')
-  if (limitations.length) {
-    result.push({ type: 'paragraph', text: `Limitaciones y pendientes: ${limitations.join(' ')} Acción requerida: sustentar, validar y dejar trazabilidad documental de los puntos señalados.` })
-  } else {
-    result.push({ type: 'paragraph', text: 'Limitaciones y pendientes: no se identifican pendientes explícitos en el texto registrado; subsiste la necesidad de verificación documental y conciliación con los soportes del expediente.' })
-  }
-
-  if (key === 'observations') {
-    result.push({ type: 'paragraph', text: 'Gestión sugerida: definir responsable, acción, evidencia esperada y fecha/condición de cierre para cada hallazgo relevante, según corresponda.' })
-  }
-
-  result.push({ type: 'paragraph', text: sectionConclusion(key, signals) })
-  return result
+  return paragraphs
 }
 
 export function buildConclusionStatement(recommendation, conditions = '', clientName = 'el cliente evaluado') {
